@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Flow Field</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; width: 100vw; height: 100vh; }
+  canvas { display: block; }
+  #ui {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 10px; opacity: 0.4; transition: opacity 0.3s;
+  }
+  #ui:hover { opacity: 1; }
+  button {
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.25);
+    color: #fff; padding: 6px 14px; border-radius: 20px; cursor: pointer;
+    font-size: 12px; letter-spacing: 0.05em;
+  }
+  button:hover { background: rgba(255,255,255,0.2); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <button id="btnPalette">Palette</button>
+  <button id="btnClear">Clear</button>
+  <button id="btnPause">Pause</button>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+let W, H, cols, rows;
+const CELL = 12;
+const PARTICLE_COUNT = 2200;
+const SPEED = 2.2;
+const FADE = 0.013;
+
+// ── Perlin noise ──────────────────────────────────────────────────────
+const P = new Uint8Array(512);
+(function(){
+  const base = new Uint8Array(256);
+  for(let i=0;i<256;i++) base[i]=i;
+  for(let i=255;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [base[i],base[j]] = [base[j],base[i]];
+  }
+  for(let i=0;i<512;i++) P[i]=base[i&255];
+})();
+
+function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+function lerp(a,b,t){ return a+t*(b-a); }
+function grad(h,x,y){
+  const v = h&3;
+  return (v===0?x+y : v===1?-x+y : v===2?x-y : -x-y);
+}
+function noise2(x,y){
+  const xi=Math.floor(x)&255, yi=Math.floor(y)&255;
+  const xf=x-Math.floor(x), yf=y-Math.floor(y);
+  const u=fade(xf), v=fade(yf);
+  const aa=P[P[xi]+yi], ab=P[P[xi]+yi+1];
+  const ba=P[P[xi+1]+yi], bb=P[P[xi+1]+yi+1];
+  return lerp(
+    lerp(grad(aa,xf,yf),   grad(ba,xf-1,yf),   u),
+    lerp(grad(ab,xf,yf-1), grad(bb,xf-1,yf-1), u),
+    v
+  );
+}
+
+// ── Palettes ──────────────────────────────────────────────────────────
+const PALETTES = [
+  (t,s) => `hsla(${160+t*120},${70+s*30}%,${50+s*20}%,`,   // Aurora
+  (t,s) => `hsla(${t*60},${80+s*20}%,${50+s*30}%,`,         // Ember
+  (t,s) => `hsla(${220+t*80},${60+s*40}%,${55+s*20}%,`,     // Indigo
+  (t,s) => `hsla(${80+t*60},${70+s*30}%,${45+s*25}%,`,      // Acid green
+  (t,s) => `hsla(${20+t*40},${85+s*15}%,${55+s*20}%,`,      // Solar flare
+];
+let paletteIdx = 0;
+
+// ── Flow field ────────────────────────────────────────────────────────
+let field = [];
+let zOffset = 0;
+const SCALE  = 0.0028;
+const SCALE2 = 0.006;
+
+function buildField() {
+  field = new Float32Array(cols * rows);
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      const n1 = noise2(x * SCALE  + zOffset, y * SCALE);
+      const n2 = noise2(x * SCALE2 + 40,      y * SCALE2 + zOffset * 0.7);
+      field[y*cols+x] = (n1 + n2 * 0.5) * Math.PI * 4;
+    }
+  }
+}
+
+function fieldAngle(px, py) {
+  const cx = (px / CELL) | 0;
+  const cy = (py / CELL) | 0;
+  const idx = Math.min(Math.max(cy,0),rows-1)*cols + Math.min(Math.max(cx,0),cols-1);
+  return field[idx];
+}
+
+// ── Particles ─────────────────────────────────────────────────────────
+class Particle {
+  constructor() { this.reset(true); }
+  reset(random) {
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
+    this.maxLife = 180 + Math.random() * 220;
+    this.age = 0;
+    this.t = Math.random();
+    this.speed = SPEED * (0.6 + Math.random() * 0.8);
+    this.px = this.x;
+    this.py = this.y;
+  }
+  step() {
+    this.px = this.x;
+    this.py = this.y;
+    const angle = fieldAngle(this.x, this.y);
+    this.x += Math.cos(angle) * this.speed;
+    this.y += Math.sin(angle) * this.speed;
+    this.age++;
+    if(this.age > this.maxLife || this.x<0 || this.x>W || this.y<0 || this.y>H) {
+      this.reset(false);
+    }
+  }
+  draw() {
+    const life = 1 - this.age / this.maxLife;
+    const s = (Math.sin(this.age * 0.02) * 0.5 + 0.5);
+    ctx.beginPath();
+    ctx.strokeStyle = PALETTES[paletteIdx](this.t, s) + (life * 0.55) + ')';
+    ctx.lineWidth = 1 + s * 1.2;
+    ctx.moveTo(this.px, this.py);
+    ctx.lineTo(this.x, this.y);
+    ctx.stroke();
+  }
+}
+
+let particles = [];
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  cols = Math.ceil(W / CELL) + 1;
+  rows = Math.ceil(H / CELL) + 1;
+  buildField();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+}
+
+function init() {
+  resize();
+  particles = Array.from({ length: PARTICLE_COUNT }, () => new Particle());
+  particles.forEach(p => { p.age = (Math.random() * p.maxLife) | 0; });
+}
+
+// ── Loop ──────────────────────────────────────────────────────────────
+let paused = false;
+let frame  = 0;
+
+function loop() {
+  if (!paused) {
+    ctx.fillStyle = `rgba(0,0,0,${FADE})`;
+    ctx.fillRect(0, 0, W, H);
+    if (frame % 2 === 0) { zOffset += 0.0018; buildField(); }
+    for(const p of particles) { p.step(); p.draw(); }
+    frame++;
+  }
+  requestAnimationFrame(loop);
+}
+
+// ── Events ────────────────────────────────────────────────────────────
+window.addEventListener('resize', resize);
+
+document.getElementById('btnPalette').addEventListener('click', () => {
+  paletteIdx = (paletteIdx + 1) % PALETTES.length;
+});
+document.getElementById('btnClear').addEventListener('click', () => {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+});
+document.getElementById('btnPause').addEventListener('click', function() {
+  paused = !paused;
+  this.textContent = paused ? 'Resume' : 'Pause';
+});
+
+canvas.addEventListener('click', e => {
+  particles.forEach(p => {
+    if(Math.random() < 0.15) {
+      p.x = e.clientX + (Math.random()-0.5)*60;
+      p.y = e.clientY + (Math.random()-0.5)*60;
+      p.px = p.x; p.py = p.y;
+      p.age = 0;
+    }
+  });
+});
+
+init();
+loop();
+</script>
+</body>
+</html>

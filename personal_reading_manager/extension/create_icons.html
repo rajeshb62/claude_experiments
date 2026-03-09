@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Generate Extension Icons</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; background: #f8fafc; }
+  h2 { margin-bottom: 16px; }
+  .icons { display: flex; gap: 20px; align-items: flex-end; margin-bottom: 20px; }
+  canvas { border: 1px solid #ddd; border-radius: 4px; }
+  button { padding: 10px 20px; background: #3b82f6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button:hover { background: #2563eb; }
+  p { color: #64748b; font-size: 13px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h2>Extension Icon Generator</h2>
+<div class="icons">
+  <div><canvas id="c16" width="16" height="16"></canvas><br/><small>16×16</small></div>
+  <div><canvas id="c48" width="48" height="48"></canvas><br/><small>48×48</small></div>
+  <div><canvas id="c128" width="128" height="128"></canvas><br/><small>128×128</small></div>
+</div>
+<button onclick="downloadAll()">Download All Icons</button>
+<p>Save each file as <code>icon16.png</code>, <code>icon48.png</code>, <code>icon128.png</code> in the <code>icons/</code> folder.</p>
+
+<script>
+function drawIcon(canvas) {
+  const s = canvas.width;
+  const ctx = canvas.getContext('2d');
+  const r = s * 0.12; // corner radius
+
+  // Background
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(s - r, 0);
+  ctx.quadraticCurveTo(s, 0, s, r);
+  ctx.lineTo(s, s - r);
+  ctx.quadraticCurveTo(s, s, s - r, s);
+  ctx.lineTo(r, s);
+  ctx.quadraticCurveTo(0, s, 0, s - r);
+  ctx.lineTo(0, r);
+  ctx.quadraticCurveTo(0, 0, r, 0);
+  ctx.closePath();
+
+  const grad = ctx.createLinearGradient(0, 0, s, s);
+  grad.addColorStop(0, '#3b82f6');
+  grad.addColorStop(1, '#1d4ed8');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Book icon (white)
+  ctx.strokeStyle = '#fff';
+  ctx.fillStyle = '#fff';
+  ctx.lineWidth = Math.max(1, s * 0.07);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const p = s * 0.18; // padding
+  const mid = s / 2;
+
+  // Book outline
+  ctx.beginPath();
+  ctx.moveTo(p, p * 0.8);
+  ctx.lineTo(p, s - p);
+  ctx.lineTo(s - p, s - p);
+  ctx.lineTo(s - p, p * 0.8);
+  ctx.stroke();
+
+  // Spine line
+  ctx.beginPath();
+  ctx.moveTo(mid, p * 0.8);
+  ctx.lineTo(mid, s - p);
+  ctx.stroke();
+
+  // Top curve (open book)
+  ctx.beginPath();
+  ctx.moveTo(p, p * 0.8);
+  ctx.quadraticCurveTo(mid, p * 0.2, mid, p * 0.5);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(s - p, p * 0.8);
+  ctx.quadraticCurveTo(mid, p * 0.2, mid, p * 0.5);
+  ctx.stroke();
+
+  // Highlight lines on right page
+  if (s >= 48) {
+    ctx.lineWidth = Math.max(1, s * 0.045);
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    const lx = mid + p * 0.35;
+    const rx = s - p * 1.1;
+    const ly1 = s * 0.42, ly2 = s * 0.55, ly3 = s * 0.67;
+    [[lx, ly1, rx, ly1], [lx, ly2, rx, ly2], [lx, ly3, rx * 0.75, ly3]].forEach(([x1, y1, x2, y2]) => {
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    });
+  }
+}
+
+['c16','c48','c128'].forEach(id => drawIcon(document.getElementById(id)));
+
+function downloadAll() {
+  [['c16','icon16'],['c48','icon48'],['c128','icon128']].forEach(([id, name]) => {
+    const a = document.createElement('a');
+    a.href = document.getElementById(id).toDataURL('image/png');
+    a.download = name + '.png';
+    a.click();
+  });
+}
+</script>
+</body>
+</html>

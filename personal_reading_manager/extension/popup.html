@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reading & Highlight Manager</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+      Reading Manager
+    </div>
+    <button class="btn btn-primary" id="saveCurrentPage">+ Save Page</button>
+  </header>
+
+  <!-- Search -->
+  <div class="search-wrap">
+    <input type="search" id="search" placeholder="Search by keyword or domain…" autocomplete="off" />
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button class="btn" id="exportAll" title="Export all highlights as Markdown">
+        ↓ Export MD
+      </button>
+      <button class="btn btn-danger" id="clearAll" title="Delete all saved articles">
+        Clear All
+      </button>
+    </div>
+    <span id="articleCount"></span>
+  </div>
+
+  <!-- Article list -->
+  <div id="articleList">
+    <div class="empty-state" id="emptyState">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+      <p>No articles saved yet.<br/>Select text on any page and right-click → <strong>Save Highlight</strong>.</p>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

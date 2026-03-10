@@ -1,1 +1,2 @@
 commit	val_bpb	memory_gb	status	description
+4f11cea	1.923586	0.0	keep	baseline: depth=4 dim=256 batch=4 grad_accum=8 44steps

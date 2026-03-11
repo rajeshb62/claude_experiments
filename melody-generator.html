@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Melody Generator</title>
+  <style>
+    :root {
+      --bg: #0f0f1a;
+      --surface: #16162a;
+      --surface2: #1e1e35;
+      --accent: #7c5cbf;
+      --accent2: #a78bfa;
+      --green: #10b981;
+      --gold: #fbbf24;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --border: #2a2a45;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 28px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .scale-badge {
+      margin-left: auto;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent2);
+      background: rgba(167,139,250,0.1);
+      border: 1px solid rgba(167,139,250,0.25);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Controls ── */
+    .controls {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      overflow-y: auto;
+    }
+
+    .section-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-dim);
+      margin-bottom: 2px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .slider-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .slider-label-row span:first-child {
+      font-size: 0.8rem;
+      color: var(--text);
+    }
+
+    .slider-value {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--accent2);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      background: var(--accent2);
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+      box-shadow: 0 0 8px rgba(167,139,250,0.5);
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+    }
+
+    .prob-note {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .btn-generate {
+      margin-top: 4px;
+      padding: 12px;
+      background: linear-gradient(135deg, #6d28d9, #a78bfa);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      letter-spacing: 0.02em;
+    }
+
+    .btn-generate:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(109,40,217,0.4);
+    }
+
+    .btn-generate:active { transform: translateY(0); }
+
+    .btn-paragraph {
+      margin-top: 6px;
+      padding: 10px;
+      background: linear-gradient(135deg, #1e40af, #3b82f6);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .btn-paragraph:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(59,130,246,0.4);
+    }
+    .btn-paragraph:active { transform: translateY(0); }
+    .btn-paragraph.generating {
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+      animation: pulse-stop 1.6s ease-in-out infinite;
+    }
+
+    .btn-sequence {
+      margin-top: 6px;
+      padding: 10px;
+      background: linear-gradient(135deg, #0d6a5e, #14b8a6);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .btn-sequence:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(20,184,166,0.4);
+    }
+    .btn-sequence:active { transform: translateY(0); }
+    .btn-sequence.generating {
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+      animation: pulse-stop 1.6s ease-in-out infinite;
+    }
+
+    .btn-fragment {
+      margin-top: 6px;
+      padding: 10px;
+      background: linear-gradient(135deg, #92400e, #f59e0b);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .btn-fragment:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(245,158,11,0.4);
+    }
+    .btn-fragment:active { transform: translateY(0); }
+    .btn-fragment.generating {
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+      animation: pulse-stop 1.6s ease-in-out infinite;
+    }
+
+    .btn-qa {
+      margin-top: 6px;
+      padding: 10px;
+      background: linear-gradient(135deg, #065f46, #10b981);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .btn-qa:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(16,185,129,0.4);
+    }
+    .btn-qa:active { transform: translateY(0); }
+    .btn-qa.generating {
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+      animation: pulse-stop 1.6s ease-in-out infinite;
+    }
+
+    .btn-suite {
+      margin-top: 6px;
+      padding: 10px;
+      background: linear-gradient(135deg, #4c1d95, #7c3aed, #db2777);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      letter-spacing: 0.02em;
+    }
+    .btn-suite:hover {
+      opacity: 0.92;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(124,58,237,0.5);
+    }
+    .btn-suite:active { transform: translateY(0); }
+    .btn-suite.generating {
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+      animation: pulse-stop 1.6s ease-in-out infinite;
+    }
+
+    .btn-generate.generating {
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+      box-shadow: 0 0 0 0 rgba(239,68,68,0.5);
+      animation: pulse-stop 1.6s ease-in-out infinite;
+    }
+
+    @keyframes pulse-stop {
+      0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+      50%      { box-shadow: 0 0 0 7px rgba(239,68,68,0); }
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--text);
+      user-select: none;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      accent-color: var(--accent2);
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── Canvas Area ── */
+    .canvas-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .piano-roll-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    #pianoRoll {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      opacity: 0.15;
+    }
+
+    .empty-text {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      opacity: 0.7;
+    }
+
+    /* ── Note strip ── */
+    .note-strip {
+      height: 46px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 5px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-shrink: 0;
+    }
+
+    .note-strip::-webkit-scrollbar { height: 3px; }
+    .note-strip::-webkit-scrollbar-track { background: transparent; }
+    .note-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .chip {
+      flex-shrink: 0;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: monospace;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      transition: background 0.1s, color 0.1s, border-color 0.1s;
+    }
+
+    .chip.active {
+      background: var(--gold);
+      color: #111;
+      border-color: var(--gold);
+      box-shadow: 0 0 8px rgba(251,191,36,0.4);
+    }
+
+    .chip-placeholder {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      opacity: 0.5;
+    }
+
+    /* ── Playback bar ── */
+    .playback-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 7px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-play {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: white;
+      min-width: 100px;
+    }
+
+    .btn-play:not(:disabled):hover { opacity: 0.9; transform: translateY(-1px); }
+
+    .btn-stop {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .btn-stop:not(:disabled):hover { border-color: var(--accent2); color: var(--accent2); }
+
+    .meta {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .btn-export {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+
+    .btn-export:not(:disabled):hover { border-color: var(--accent2); }
+
+    .algo-switch {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+    }
+    .algo-btn {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 0.78rem;
+      font-weight: 600;
+      background: var(--surface2);
+      color: var(--text);
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .algo-switch > .algo-btn:first-child,
+    .rhythm-switch > .algo-btn:first-child { border-radius: 6px 0 0 6px; }
+    .algo-switch > .algo-btn:last-child,
+    .rhythm-switch > .algo-btn:last-child  { border-radius: 0 6px 6px 0; }
+    .algo-switch > .algo-btn + .algo-btn,
+    .rhythm-switch > .algo-btn + .algo-btn { border-left: 1px solid var(--border); }
+    .algo-btn:not(.active):hover {
+      background: rgba(167,139,250,0.12);
+      color: var(--accent2);
+    }
+    .algo-btn.active {
+      background: var(--accent2);
+      color: #fff;
+    }
+    .rhythm-switch {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+    }
+    .rhythm-switch .algo-btn {
+      font-size: 0.68rem;
+      padding: 7px 2px;
+    }
+
+    /* ── Note picker ── */
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+    }
+    .preset-btn {
+      flex: 1;
+      padding: 4px 3px;
+      font-size: 0.63rem;
+      font-weight: 600;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.12s;
+      white-space: nowrap;
+    }
+    .preset-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    .note-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+    }
+    .note-key {
+      flex: 0 0 calc(100% / 6 - 3px);
+      padding: 5px 2px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-align: center;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+      user-select: none;
+    }
+    .note-key.sharp-key { font-style: italic; }
+    .note-key.on {
+      background: var(--accent2);
+      color: #fff;
+      border-color: var(--accent2);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:1.4rem">🎵</span>
+  <h1>Melody Generator</h1>
+  <span class="scale-badge">C Major · Random Walk</span>
+</header>
+
+<div class="layout">
+
+  <!-- Controls -->
+  <aside class="controls">
+
+    <div class="algo-switch">
+      <button class="algo-btn active" id="algoRandom" onclick="setAlgo('random')">Random Walk</button>
+      <button class="algo-btn"        id="algoLSystem" onclick="setAlgo('lsystem')">L-System</button>
+    </div>
+
+    <div class="section-label">Rhythm Style</div>
+    <div class="rhythm-switch">
+      <button class="algo-btn"        id="rhythm_energetic" onclick="setRhythm('energetic')">Energetic</button>
+      <button class="algo-btn"        id="rhythm_laidback"  onclick="setRhythm('laidback')">Laid-back</button>
+      <button class="algo-btn active" id="rhythm_bouncy"    onclick="setRhythm('bouncy')">Bouncy</button>
+    </div>
+
+    <div class="section-label">Playback</div>
+    <div class="control-group">
+      <div class="slider-row">
+        <div class="slider-label-row">
+          <span>Tempo</span>
+          <span class="slider-value" id="bpmVal">120 BPM</span>
+        </div>
+        <input type="range" id="bpm" min="60" max="180" value="120" step="5">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label-row">
+          <span>Volume</span>
+          <span class="slider-value" id="volumeVal">80%</span>
+        </div>
+        <input type="range" id="volume" min="0" max="100" value="80" step="1">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label-row">
+          <span>Bars</span>
+          <span class="slider-value" id="barsVal">2 bars</span>
+        </div>
+        <input type="range" id="numBars" min="1" max="8" value="2" step="1">
+      </div>
+      <div class="slider-row">
+        <div class="slider-label-row">
+          <span>Center Octave</span>
+          <span class="slider-value" id="octaveVal">4</span>
+        </div>
+        <input type="range" id="octave" min="3" max="5" value="4" step="1">
+      </div>
+    </div>
+
+    <div id="randomWalkControls">
+
+
+    </div><!-- #randomWalkControls -->
+
+    <div id="lsystemControls" style="display:none">
+
+    <div class="divider"></div>
+
+    <div class="section-label">L-System Settings</div>
+    <div class="control-group">
+      <div class="slider-row">
+        <div class="slider-label-row">
+          <span>Rewrite Depth</span>
+          <span class="slider-value" id="lsDepthVal">2</span>
+        </div>
+        <input type="range" id="lsDepth" min="1" max="4" value="2" step="1">
+      </div>
+      <p class="prob-note">
+        Depth 1 = short motif repeated literally.<br>
+        Depth 4 = heavily elaborated, more variety.
+      </p>
+    </div>
+
+    </div><!-- #lsystemControls -->
+
+    <div class="divider"></div>
+    <div class="section-label">Scale Notes</div>
+    <div class="preset-row">
+      <button class="preset-btn" onclick="applyPreset('major')">Major</button>
+      <button class="preset-btn" onclick="applyPreset('minor')">Minor</button>
+      <button class="preset-btn" onclick="applyPreset('pent')">Penta</button>
+      <button class="preset-btn" onclick="applyPreset('blues')">Blues</button>
+      <button class="preset-btn" onclick="applyPreset('dorian')">Dorian</button>
+      <button class="preset-btn" onclick="applyPreset('chrom')">All 12</button>
+    </div>
+    <div class="note-picker" id="notePicker"></div>
+
+    <button class="btn-generate" id="generateBtn" onclick="toggleGenerating()">▶ Generate &amp; Play</button>
+    <button class="btn-paragraph" id="paragraphBtn" onclick="toggleParagraph()">🎼 Develop Paragraph</button>
+    <button class="btn-sequence" id="seqBtn" onclick="toggleSequence()">🔀 Sequence Motif</button>
+    <button class="btn-fragment" id="fragBtn" onclick="toggleFragment()">✂ Fragment &amp; Develop</button>
+    <button class="btn-qa" id="qaBtn" onclick="toggleQA()">↔ Q &amp; A</button>
+    <button class="btn-suite" id="suiteBtn" onclick="toggleSuite()">🎵 Full Suite</button>
+
+  </aside>
+
+  <!-- Canvas + strips -->
+  <div class="canvas-area">
+
+    <div class="piano-roll-wrap">
+      <canvas id="pianoRoll"></canvas>
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">♩</div>
+        <div class="empty-text">Click Generate Melody to begin</div>
+      </div>
+    </div>
+
+    <div class="note-strip" id="noteStrip">
+      <span class="chip-placeholder">— notes will appear here —</span>
+    </div>
+
+    <div class="playback-bar">
+      <span class="meta" id="meta">Click "Generate &amp; Play" to begin the loop</span>
+      <button class="btn btn-export" id="exportBtn" onclick="exportNotes()" disabled>⬇ Copy Notes</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const ALL_NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const SEMITONES = { C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11 };
+
+const PRESETS = {
+  major:  ['C','D','E','F','G','A','B'],
+  minor:  ['C','D','D#','F','G','G#','A#'],
+  pent:   ['C','D','E','G','A'],
+  blues:  ['C','D#','F','F#','G','A#'],
+  dorian: ['C','D','D#','F','G','A','A#'],
+  chrom:  ALL_NOTES,
+};
+
+let activeNoteSet = new Set(PRESETS.major);
+
+// ─── Utilities ───────────────────────────────────────────────────────────────
+
+function noteToFreq(name, octave) {
+  const midi = 12 * (octave + 1) + SEMITONES[name];
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function buildScale(centerOctave) {
+  const active = ALL_NOTES.filter(n => activeNoteSet.has(n));
+  const notes = [];
+  for (let oct = centerOctave - 1; oct <= centerOctave + 1; oct++) {
+    for (const name of active) {
+      notes.push({ name, octave: oct, freq: noteToFreq(name, oct) });
+    }
+  }
+  return notes;
+}
+
+function getRootName() {
+  return ALL_NOTES.find(n => activeNoteSet.has(n)) || 'C';
+}
+
+function getTonicIdx(allNotes, centerOctave) {
+  const root = getRootName();
+  let i = allNotes.findIndex(n => n.name === root && n.octave === centerOctave);
+  if (i < 0) i = allNotes.findIndex(n => n.octave === centerOctave);
+  return Math.max(0, i);
+}
+
+// Map normalized pitch [0,1] to a blue→purple→pink color
+function pitchColor(t, alpha = 1) {
+  const r = Math.round(59  + t * (236 - 59));
+  const g = Math.round(130 + t * (72  - 130));
+  const b = Math.round(246 + t * (153 - 246));
+  return alpha < 1 ? `rgba(${r},${g},${b},${alpha})` : `rgb(${r},${g},${b})`;
+}
+
+// ─── Melody generation ───────────────────────────────────────────────────────
+
+function generateMelody(numNotes, centerOctave, rawSmall, rawLarge, rawRepeat) {
+  const allNotes = buildScale(centerOctave);
+  const range = allNotes.length; // 21
+
+  // Tonic pull gets whatever is left after the other three
+  const rawTonic = Math.max(5, 100 - rawSmall - rawLarge - rawRepeat);
+  const total    = rawSmall + rawLarge + rawRepeat + rawTonic;
+
+  const pRepeat = rawRepeat / total;
+  const pTonic  = rawTonic  / total;
+  const pSmall  = rawSmall  / total;
+  // pLarge = remainder
+
+  // Cumulative thresholds
+  const t1 = pRepeat;
+  const t2 = t1 + pTonic;
+  const t3 = t2 + pSmall;
+
+  // Start on root note in the center octave
+  let idx = getTonicIdx(allNotes, centerOctave);
+  const tonicIdx = idx;
+  const melody = [allNotes[idx]];
+
+  for (let i = 1; i < numNotes; i++) {
+    const rand     = Math.random();
+    const progress = i / (numNotes - 1); // 0→1
+
+    // Arch bias: prefer up in first half, down in second half
+    const upBias = 0.5 + (0.5 - progress) * 0.3; // 0.65 → 0.35
+
+    let delta = 0;
+
+    if (rand < t1) {
+      // Repeat same note
+      delta = 0;
+
+    } else if (rand < t2) {
+      // Tonic pull: step toward home C
+      if (idx !== tonicIdx) {
+        const dir  = Math.sign(tonicIdx - idx);
+        const step = Math.random() < 0.65 ? 1 : 2;
+        delta = dir * step;
+      }
+
+    } else if (rand < t3) {
+      // Small step: 1 or 2 scale degrees
+      const step = Math.random() < 0.6 ? 1 : 2;
+      delta = (Math.random() < upBias ? 1 : -1) * step;
+
+    } else {
+      // Large leap: 3, 4, 5, or octave (7)
+      const sizes = [3, 4, 5, 7];
+      const step  = sizes[Math.floor(Math.random() * sizes.length)];
+      delta = (Math.random() < upBias ? 1 : -1) * step;
+    }
+
+    // Boundary reflection keeps melody inside the 3-octave range
+    let newIdx = idx + delta;
+    if (newIdx < 0)      newIdx = Math.abs(newIdx);
+    if (newIdx >= range) newIdx = 2 * (range - 1) - newIdx;
+    newIdx = Math.max(0, Math.min(range - 1, newIdx));
+
+    idx = newIdx;
+    melody.push(allNotes[idx]);
+  }
+
+  return melody;
+}
+
+// ─── L-System melody generator ───────────────────────────────────────────────
+
+const ARCHETYPES = [
+  [+1, +1, -1, +2],
+  [-1, -1, +1, -2],
+  [+2, -1, +2, -1],
+  [+1, +3, -2, -1],
+  [+2, +2, -1, -2],
+];
+
+const REWRITE_RULES = {
+   0: [[0, +1], [0, -1], [0]],
+  '+1': [[+1, +1, -1], [+1, 0, +1], [+1]],
+  '+2': [[+1, +1], [+2, -1], [+2, 0], [+2]],
+  '+3': [[+2, +1], [+3, -1, +1], [+3]],
+  '+4': [[+2, +2], [+4, -1], [+3, +1], [+4]],
+  '+5': [[+2, +2], [+4, -1], [+3, +1], [+4]],
+  '+7': [[+4, +3], [+7, -2], [+7]],
+  '-1': [[-1, -1, +1], [-1, 0, -1], [-1]],
+  '-2': [[-1, -1], [-2, +1], [-2, 0], [-2]],
+  '-3': [[-2, -1], [-3, +1, -1], [-3]],
+  '-4': [[-2, -2], [-4, +1], [-3, -1], [-4]],
+  '-5': [[-2, -2], [-4, +1], [-3, -1], [-4]],
+  '-7': [[-4, -3], [-7, +2], [-7]],
+};
+
+function rewriteInterval(interval) {
+  const key = interval === 0 ? 0 : (interval > 0 ? `+${interval}` : `${interval}`);
+  const expansions = REWRITE_RULES[key];
+  if (!expansions) return [interval];
+  return expansions[Math.floor(Math.random() * expansions.length)];
+}
+
+function generateMelodyLSystem(numNotes, centerOctave, depth) {
+  const allNotes = buildScale(centerOctave);
+  const range    = allNotes.length; // 21
+
+  // Step A: pick a random archetype, optionally negate
+  let axiom = [...ARCHETYPES[Math.floor(Math.random() * ARCHETYPES.length)]];
+  if (Math.random() < 0.5) axiom = axiom.map(x => -x);
+
+  // Step B+C: always run exactly `depth` rewrite passes, then trim
+  let sequence = [...axiom];
+  for (let d = 0; d < depth; d++) {
+    sequence = sequence.flatMap(rewriteInterval);
+  }
+  sequence = sequence.slice(0, numNotes - 1); // -1 because tonic is first note
+
+  // Step D: convert intervals → pitches with boundary reflection
+  let idx = getTonicIdx(allNotes, centerOctave);
+  const melody = [allNotes[idx]];
+
+  for (const delta of sequence) {
+    let newIdx = idx + delta;
+    if (newIdx < 0)      newIdx = Math.abs(newIdx);
+    if (newIdx >= range) newIdx = 2 * (range - 1) - newIdx;
+    newIdx = Math.max(0, Math.min(range - 1, newIdx));
+    idx = newIdx;
+    melody.push(allNotes[idx]);
+  }
+
+  // Step E: tonic pull — nudge last note toward root if far away
+  const tonicIdx = getTonicIdx(allNotes, centerOctave);
+  if (melody.length >= 2) {
+    const lastIdx = allNotes.findIndex(n =>
+      n.name === melody[melody.length - 1].name &&
+      n.octave === melody[melody.length - 1].octave);
+    if (Math.abs(lastIdx - tonicIdx) >= 3) {
+      const nudge = lastIdx > tonicIdx ? -1 : 1;
+      melody[melody.length - 1] = allNotes[Math.max(0, Math.min(range - 1, lastIdx + nudge))];
+    }
+  }
+
+  return melody;
+}
+
+// ─── Rhythm engine ────────────────────────────────────────────────────────────
+
+const DURATIONS       = [0.25, 0.5, 1.0, 1.5, 2.0];
+const PALETTE_WEIGHTS = {
+  energetic: [0.32, 0.44, 0.16, 0.05, 0.03], // 16ths + 8ths dominate
+  laidback:  [0.04, 0.16, 0.38, 0.28, 0.14], // quarters + dotted + halves
+  bouncy:    [0.14, 0.48, 0.28, 0.07, 0.03], // 8ths + quarters, punchy
+};
+
+let rhythmStyle = 'bouncy';
+
+function setRhythm(style) {
+  rhythmStyle = style;
+  ['energetic','laidback','bouncy'].forEach(s =>
+    document.getElementById('rhythm_' + s).classList.toggle('active', s === style));
+}
+
+function pickDuration(remaining, style, { lastWasLeap, shortRunLen, isStrongDegree }) {
+  const validIdx = [], weights = [];
+  DURATIONS.forEach((d, i) => {
+    if (d <= remaining + 0.001) {
+      let w = PALETTE_WEIGHTS[style][i];
+      if (lastWasLeap      && d >= 1.0) w *= 2.5;
+      if (shortRunLen >= 2 && d >= 1.0) w *= 2.0;
+      if (isStrongDegree   && d >= 0.5) w *= 1.4;
+      validIdx.push(i);
+      weights.push(w);
+    }
+  });
+  if (validIdx.length === 0) return remaining;
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let j = 0; j < weights.length; j++) {
+    r -= weights[j];
+    if (r <= 0) return DURATIONS[validIdx[j]];
+  }
+  return DURATIONS[validIdx[validIdx.length - 1]];
+}
+
+function generateRhythmicMelody(numBars, centerOctave, style, pitchGenFn) {
+  const BAR_BEATS = 4.0;
+  const poolSize  = Math.max(64, numBars * 12);
+  const pitchPool = pitchGenFn(poolSize, centerOctave);
+  const allNotes  = buildScale(centerOctave);
+  const notes     = [];
+  let pitchIdx    = 0, prevIdx = -1, shortRunLen = 0;
+
+  for (let bar = 0; bar < numBars; bar++) {
+    let remaining = BAR_BEATS;
+    while (remaining > 0.001) {
+      const pitch        = pitchPool[pitchIdx % pitchPool.length];
+      const scaleIdx     = allNotes.findIndex(n => n.name === pitch.name && n.octave === pitch.octave);
+      const lastWasLeap  = prevIdx >= 0 && Math.abs(scaleIdx - prevIdx) >= 4;
+      const isStrongDegree = ['C','E','G'].includes(pitch.name);
+      const dur = pickDuration(remaining, style, { lastWasLeap, shortRunLen, isStrongDegree });
+      notes.push({ ...pitch, duration: dur });
+      remaining  -= dur;
+      prevIdx     = scaleIdx;
+      shortRunLen = dur <= 0.5 ? shortRunLen + 1 : 0;
+      pitchIdx++;
+    }
+  }
+  return notes;
+}
+
+// ─── Algorithm selector ───────────────────────────────────────────────────────
+
+let algoMode = 'random';
+
+function setAlgo(mode) {
+  algoMode = mode;
+  document.getElementById('randomWalkControls').style.display = mode === 'random' ? '' : 'none';
+  document.getElementById('lsystemControls').style.display   = mode === 'lsystem' ? '' : 'none';
+  document.getElementById('algoRandom').classList.toggle('active', mode === 'random');
+  document.getElementById('algoLSystem').classList.toggle('active', mode === 'lsystem');
+}
+
+// ─── Paragraph development ────────────────────────────────────────────────────
+
+function transposePhrase(phrase, steps, allNotes) {
+  const range = allNotes.length;
+  return phrase.map(note => {
+    const idx = allNotes.findIndex(n => n.name === note.name && n.octave === note.octave);
+    let newIdx = idx + steps;
+    if (newIdx < 0)      newIdx = Math.abs(newIdx);          // boundary reflection
+    if (newIdx >= range) newIdx = 2 * (range - 1) - newIdx;
+    return { ...allNotes[Math.max(0, Math.min(range - 1, newIdx))], duration: note.duration };
+  });
+}
+
+function resolveToTonic(phrase, allNotes, centerOctave) {
+  if (!phrase.length) return phrase;
+  const result    = phrase.map(n => ({ ...n }));
+  const tonicIdx  = getTonicIdx(allNotes, centerOctave);
+  // Keep the last note's duration; just land on tonic
+  result[result.length - 1] = { ...allNotes[tonicIdx], duration: result[result.length - 1].duration };
+  return result;
+}
+
+function buildParagraph(sentence, centerOctave) {
+  const allNotes = buildScale(centerOctave);
+  // 4-section A B C A' structure:
+  //   A  — original statement
+  //   B  — sequence up 2 scale steps (up a third — "answer/echo")
+  //   C  — sequence down 2 scale steps (down a third — "development")
+  //   A' — return: original, final note resolved to tonic
+  const A  = sentence.map(n => ({ ...n }));
+  const B  = transposePhrase(sentence, +2, allNotes);
+  const C  = transposePhrase(sentence, -2, allNotes);
+  const Ap = resolveToTonic(sentence.map(n => ({ ...n })), allNotes, centerOctave);
+  return [...A, ...B, ...C, ...Ap];
+}
+
+// ─── Sequence-motif paragraph ─────────────────────────────────────────────────
+//
+// Extracts the opening motif (notes before the first large leap ≥3 scale degrees,
+// minimum 3 notes) as the sequence unit. This captures the most distinctive
+// material (e.g. C-D-C rather than the weak tail D-E-D), then repeats that
+// interval pattern starting 1 and 2 steps above, creating upward momentum.
+
+function extractOpeningMotif(sentence, allNotes) {
+  if (sentence.length <= 3) return sentence.slice(0, 3);
+  const idx = n => allNotes.findIndex(a => a.name === n.name && a.octave === n.octave);
+  for (let i = 1; i < sentence.length - 1; i++) {
+    if (Math.abs(idx(sentence[i]) - idx(sentence[i - 1])) >= 3) {
+      // leap found at position i — use notes 0..i (min length 3)
+      return sentence.slice(0, Math.max(3, i));
+    }
+  }
+  return sentence.slice(0, 3); // no early leap, fall back to first 3
+}
+
+function buildSequencedParagraph(sentence, centerOctave) {
+  const allNotes = buildScale(centerOctave);
+  const range    = allNotes.length;
+
+  const motif    = extractOpeningMotif(sentence, allNotes);
+  const midxs    = motif.map(n => allNotes.findIndex(a => a.name === n.name && a.octave === n.octave));
+  const intervals = midxs.slice(1).map((v, i) => v - midxs[i]);
+
+  function buildRep(startIdx) {
+    let cur = Math.max(0, Math.min(range - 1, startIdx));
+    const rep = [{ ...allNotes[cur], duration: motif[0].duration }];
+    for (let i = 0; i < intervals.length; i++) {
+      let ni = cur + intervals[i];
+      if (ni < 0)      ni = Math.abs(ni);
+      if (ni >= range) ni = 2 * (range - 1) - ni;
+      ni = Math.max(0, Math.min(range - 1, ni));
+      rep.push({ ...allNotes[ni], duration: motif[i + 1].duration });
+      cur = ni;
+    }
+    return rep;
+  }
+
+  const S1 = buildRep(midxs[0] + 1);
+  const S2 = buildRep(midxs[0] + 2);
+  const A  = sentence.map(n => ({ ...n }));
+  const Ap = resolveToTonic(sentence.map(n => ({ ...n })), allNotes, centerOctave);
+  return [...A, ...S1, ...S2, ...Ap];
+}
+
+// ─── Fragment + Develop paragraph ────────────────────────────────────────────
+//
+// Breaks the sentence into three fragments and develops each:
+//   Ostinato  — first 3 notes repeated 3×  (rhythmic drive)
+//   Climax    — highest note + turn figure  (emotional peak)
+//   Descent   — last 2 notes × 3, duration × 0.6 each rep  (accelerating rush)
+//   A'        — full sentence resolved to tonic  (home)
+
+function buildFragmentedParagraph(sentence, centerOctave) {
+  const allNotes = buildScale(centerOctave);
+  const range    = allNotes.length;
+
+  // ── Ostinato: first 3 notes × 3 ──
+  const pickup   = sentence.slice(0, 3);
+  const ostinato = [...pickup, ...pickup, ...pickup].map(n => ({ ...n }));
+
+  // ── Climax turn: find the highest note by scale-degree index ──
+  const scaleIdx = n => allNotes.findIndex(a => a.name === n.name && a.octave === n.octave);
+  const peakNote = sentence.reduce((best, n) => scaleIdx(n) > scaleIdx(best) ? n : best, sentence[0]);
+  const pi       = scaleIdx(peakNote);
+  const clamp    = i => Math.max(0, Math.min(range - 1, i));
+  // Arrival: hold peak, ornament with neighbors
+  const turnOnce = [
+    { ...allNotes[pi],          duration: 2.0 },
+    { ...allNotes[clamp(pi-1)], duration: 0.5 },
+    { ...allNotes[pi],          duration: 0.5 },
+    { ...allNotes[clamp(pi+1)], duration: 0.5 },
+    { ...allNotes[pi],          duration: 1.0 },
+  ];
+  // Departure: stepwise descent from peak (4 steps, 8th notes)
+  // varies with the active scale — no repeated lick
+  const peakDescent = [];
+  for (let i = 1; i <= 4; i++) {
+    peakDescent.push({ ...allNotes[clamp(pi - i)], duration: 0.5 });
+  }
+  const climax = [...turnOnce, ...peakDescent];
+
+  // ── Descent: last 2 notes × 3, each rep ~0.6× as long (getting faster) ──
+  const tail    = sentence.slice(-2);
+  const descent = [];
+  let   durMult = 1.0;
+  for (let rep = 0; rep < 3; rep++) {
+    for (const n of tail) {
+      descent.push({ ...n, duration: Math.max(0.25, n.duration * durMult) });
+    }
+    durMult *= 0.6;
+  }
+
+  const A  = sentence.map(n => ({ ...n }));
+  const Ap = resolveToTonic(sentence.map(n => ({ ...n })), allNotes, centerOctave);
+  return [...A, ...ostinato, ...climax, ...descent, ...Ap];
+}
+
+// ─── Question–Answer paragraph ────────────────────────────────────────────────
+//
+// Treats the sentence as a "question" phrase (ends unresolved) and generates
+// an "answer" by inverting all pitch intervals while keeping the same rhythm,
+// then resolves the last note to the nearest C (tonic).
+//
+// Structure: Q1 → A1 → Q2 (octave up) → A2 (octave up, resolved)
+
+function buildQAParagraph(sentence, centerOctave) {
+  const allNotes = buildScale(centerOctave);
+  const range    = allNotes.length;
+
+  const scaleIdx  = n => allNotes.findIndex(a => a.name === n.name && a.octave === n.octave);
+  const indices   = sentence.map(scaleIdx);
+  const deltas    = indices.slice(1).map((v, i) => v - indices[i]);
+  const invDeltas = deltas.map(d => -d);
+  const durations = sentence.map(n => n.duration);
+
+  function applyDeltas(startIdx, ds, durs) {
+    let cur = Math.max(0, Math.min(range - 1, startIdx));
+    const out = [{ ...allNotes[cur], duration: durs[0] }];
+    for (let i = 0; i < ds.length; i++) {
+      let ni = cur + ds[i];
+      if (ni < 0)      ni = Math.abs(ni);
+      if (ni >= range) ni = 2 * (range - 1) - ni;
+      ni = Math.max(0, Math.min(range - 1, ni));
+      out.push({ ...allNotes[ni], duration: durs[i + 1] });
+      cur = ni;
+    }
+    return out;
+  }
+
+  // Resolve the last note to whichever root is closest in scale-degree space
+  function resolveToNearestC(phrase) {
+    if (!phrase.length) return phrase;
+    const result   = phrase.map(n => ({ ...n }));
+    const root     = getRootName();
+    const rootNotes = allNotes.map((n, i) => ({ ...n, idx: i })).filter(n => n.name === root);
+    if (!rootNotes.length) return result;
+    const lastIdx  = scaleIdx(result[result.length - 1]);
+    const nearest  = rootNotes.reduce((best, c) =>
+      Math.abs(c.idx - lastIdx) < Math.abs(best.idx - lastIdx) ? c : best, rootNotes[0]);
+    result[result.length - 1] = { ...nearest, duration: result[result.length - 1].duration };
+    return result;
+  }
+
+  const octaveSteps = ALL_NOTES.filter(n => activeNoteSet.has(n)).length; // scale-aware octave
+  const Q1 = sentence.map(n => ({ ...n }));
+  const A1 = resolveToNearestC(applyDeltas(indices[0], invDeltas, durations));
+  const Q2 = transposePhrase(sentence, +octaveSteps, allNotes);
+  const A2 = resolveToNearestC(applyDeltas(indices[0] + octaveSteps, invDeltas, durations));
+
+  return [...Q1, ...A1, ...Q2, ...A2];
+}
+
+// ─── Full Suite ───────────────────────────────────────────────────────────────
+//
+// Chains all four development methods on the same sentence into a single
+// through-composed arc. Each section begins with the theme (A), acting as
+// a ritornello, before branching into its own development:
+//
+//   I.  Paragraph  (A – B transposed up – C transposed down – A')
+//   II. Sequence   (A – motif ×1 step up – motif ×2 steps up – A')
+//   III.Fragment   (A – ostinato – climax turn – accelerating descent – A')
+//   IV. Q & A      (Q1 – A1 inverted – Q2 octave up – A2 inverted)
+//   Coda           (theme, last note resolved to tonic)
+//
+// Emotional arc: statement → exploration → momentum → peak → dialogue → home
+
+// Extend the last note of a section by +1 beat — audible breath between suite sections
+function breathe(section) {
+  if (!section.length) return section;
+  const out = section.map(n => ({ ...n }));
+  out[out.length - 1] = { ...out[out.length - 1], duration: out[out.length - 1].duration + 1 };
+  return out;
+}
+
+function buildSuite(sentence, centerOctave) {
+  const allNotes = buildScale(centerOctave);
+  const tonicIdx = getTonicIdx(allNotes, centerOctave);
+
+  const paragraph = breathe(buildParagraph(sentence, centerOctave));
+  const sequence  = breathe(buildSequencedParagraph(sentence, centerOctave));
+  const fragment  = breathe(buildFragmentedParagraph(sentence, centerOctave));
+  const qa        = breathe(buildQAParagraph(sentence, centerOctave));
+
+  // Coda: theme with final note pinned to tonic, held as a half note
+  const coda = sentence.map(n => ({ ...n }));
+  coda[coda.length - 1] = { ...allNotes[tonicIdx], duration: 2.0 };
+
+  return [...paragraph, ...sequence, ...fragment, ...qa, ...coda];
+}
+
+let paragraphMode = false;
+let sequenceMode  = false;
+let fragmentMode  = false;
+let qaMode        = false;
+let suiteMode     = false;
+
+function stopAllModes() {
+  paragraphMode  = false;
+  sequenceMode   = false;
+  fragmentMode   = false;
+  qaMode         = false;
+  suiteMode      = false;
+  continuousMode = false;
+  stopPlayback();
+  document.getElementById('paragraphBtn').textContent = '🎼 Develop Paragraph';
+  document.getElementById('paragraphBtn').classList.remove('generating');
+  document.getElementById('seqBtn').textContent = '🔀 Sequence Motif';
+  document.getElementById('seqBtn').classList.remove('generating');
+  document.getElementById('fragBtn').textContent = '✂ Fragment & Develop';
+  document.getElementById('fragBtn').classList.remove('generating');
+  document.getElementById('qaBtn').textContent = '↔ Q & A';
+  document.getElementById('qaBtn').classList.remove('generating');
+  document.getElementById('suiteBtn').textContent = '🎵 Full Suite';
+  document.getElementById('suiteBtn').classList.remove('generating');
+  document.getElementById('generateBtn').textContent = '▶ Generate & Play';
+  document.getElementById('generateBtn').classList.remove('generating');
+}
+
+function toggleParagraph() {
+  const pBtn = document.getElementById('paragraphBtn');
+  if (paragraphMode) {
+    stopAllModes();
+    document.getElementById('meta').textContent = 'Stopped.';
+  } else {
+    stopAllModes();
+    paragraphMode  = true;
+    continuousMode = true;
+    pBtn.textContent = '■ Stop Paragraph';
+    pBtn.classList.add('generating');
+    generateAndPlay();
+  }
+}
+
+function toggleSequence() {
+  const sBtn = document.getElementById('seqBtn');
+  if (sequenceMode) {
+    stopAllModes();
+    document.getElementById('meta').textContent = 'Stopped.';
+  } else {
+    stopAllModes();
+    sequenceMode   = true;
+    continuousMode = true;
+    sBtn.textContent = '■ Stop Sequence';
+    sBtn.classList.add('generating');
+    generateAndPlay();
+  }
+}
+
+function toggleFragment() {
+  const fBtn = document.getElementById('fragBtn');
+  if (fragmentMode) {
+    stopAllModes();
+    document.getElementById('meta').textContent = 'Stopped.';
+  } else {
+    stopAllModes();
+    fragmentMode   = true;
+    continuousMode = true;
+    fBtn.textContent = '■ Stop Fragment';
+    fBtn.classList.add('generating');
+    generateAndPlay();
+  }
+}
+
+function toggleQA() {
+  const qBtn = document.getElementById('qaBtn');
+  if (qaMode) {
+    stopAllModes();
+    document.getElementById('meta').textContent = 'Stopped.';
+  } else {
+    stopAllModes();
+    qaMode         = true;
+    continuousMode = true;
+    qBtn.textContent = '■ Stop Q & A';
+    qBtn.classList.add('generating');
+    generateAndPlay();
+  }
+}
+
+function toggleSuite() {
+  const sBtn = document.getElementById('suiteBtn');
+  if (suiteMode) {
+    stopAllModes();
+    document.getElementById('meta').textContent = 'Stopped.';
+  } else {
+    stopAllModes();
+    suiteMode      = true;
+    continuousMode = true;
+    sBtn.textContent = '■ Stop Suite';
+    sBtn.classList.add('generating');
+    generateAndPlay();
+  }
+}
+
+// ─── State ───────────────────────────────────────────────────────────────────
+
+let melody           = [];
+let audioCtx         = null;
+let masterGain       = null;
+let isPlaying        = false;
+let continuousMode   = false;
+let playStartTime    = 0;   // AudioContext time this melody's notes start
+let nextAudioTime    = 0;   // AudioContext time the NEXT melody should start
+let activeNoteIdx    = -1;
+let animFrame        = null;
+let scheduledNodes   = [];
+
+// ─── Audio ───────────────────────────────────────────────────────────────────
+
+function getCtx() {
+  if (!audioCtx) {
+    audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = +document.getElementById('volume').value / 100;
+    masterGain.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function scheduleNote(freq, t0, dur) {
+  const ctx = getCtx();
+
+  // Triangle + upper octave sine → warm, piano-ish tone
+  const osc1 = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const mix  = ctx.createGain();
+  const env  = ctx.createGain();
+
+  osc1.type = 'triangle';
+  osc1.frequency.value = freq;
+  osc2.type = 'sine';
+  osc2.frequency.value = freq * 2;
+
+  mix.gain.value = 0.25; // blend upper harmonic quietly
+
+  osc1.connect(env);
+  osc2.connect(mix);
+  mix.connect(env);
+  env.connect(masterGain);
+
+  // ADSR envelope — scaled to note duration to prevent clipping on short notes
+  const atk      = Math.min(0.012, dur * 0.10);
+  const dec      = Math.min(0.10,  dur * 0.35);
+  const rel      = Math.min(0.08,  dur * 0.25);
+  const susStart = Math.max(atk + dec, dur - rel);
+
+  env.gain.setValueAtTime(0, t0);
+  env.gain.linearRampToValueAtTime(0.45, t0 + atk);
+  env.gain.linearRampToValueAtTime(0.28, t0 + atk + dec);
+  env.gain.setValueAtTime(0.28, t0 + susStart);
+  env.gain.linearRampToValueAtTime(0, t0 + dur);            // release
+
+  osc1.start(t0); osc1.stop(t0 + dur);
+  osc2.start(t0); osc2.stop(t0 + dur);
+
+  scheduledNodes.push(osc1, osc2);
+}
+
+// ─── Playback ────────────────────────────────────────────────────────────────
+//
+// Audio is scheduled using precise AudioContext timestamps so there is zero
+// gap between melodies. setTimeout is used only for the visual swap, which
+// fires approximately when each melody begins.
+
+function scheduleOneMelody(mel, startT, spb) {
+  let t = startT;
+  mel.forEach(note => {
+    const durSec = note.duration * spb;
+    scheduleNote(note.freq, t, durSec * 0.88);
+    t += durSec;
+  });
+}
+
+function stopPlayback() {
+  isPlaying     = false;
+  activeNoteIdx = -1;
+  nextAudioTime = 0;
+
+  scheduledNodes.forEach(n => { try { n.stop(); } catch(_) {} });
+  scheduledNodes = [];
+
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+
+  drawRoll(-1);
+  updateChips(-1);
+}
+
+function tick() {
+  if (!isPlaying) return;
+
+  const ctx          = getCtx();
+  const bpm          = +document.getElementById('bpm').value;
+  const spb          = 60 / bpm;
+  const elapsedBeats = (ctx.currentTime - playStartTime) / spb;
+
+  let cum = 0, ni = -1;
+  for (let i = 0; i < melody.length; i++) {
+    const d = melody[i].duration || 1;
+    if (elapsedBeats >= cum && elapsedBeats < cum + d) { ni = i; break; }
+    cum += d;
+  }
+
+  if (ni !== activeNoteIdx && ni >= 0) {
+    activeNoteIdx = ni;
+    drawRoll(activeNoteIdx);
+    updateChips(activeNoteIdx);
+  }
+
+  animFrame = requestAnimationFrame(tick);
+}
+
+// ─── Piano roll drawing ──────────────────────────────────────────────────────
+
+// Polyfill roundRect for older browsers
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    this.beginPath();
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+    return this;
+  };
+}
+
+function drawRoll(highlightIdx = -1) {
+  const canvas = document.getElementById('pianoRoll');
+  const wrap   = canvas.parentElement;
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  const ctx = canvas.getContext('2d');
+
+  if (!melody.length) return;
+
+  const W   = canvas.width;
+  const H   = canvas.height;
+  const pad = { t: 28, b: 24, l: 32, r: 12 };
+  const pw  = W - pad.l - pad.r;
+  const ph  = H - pad.t - pad.b;
+
+  const centerOctave = +document.getElementById('octave').value;
+  const allNotes     = buildScale(centerOctave);
+  const maxP         = allNotes.length - 1;
+
+  // Cumulative beat positions for proportional layout
+  const totalBeats = melody.reduce((s, n) => s + (n.duration || 1), 0);
+  const cumBeats   = [];
+  let cum = 0;
+  melody.forEach(n => { cumBeats.push(cum); cum += (n.duration || 1); });
+
+  function getX(i)       { return pad.l + (cumBeats[i] / totalBeats) * pw; }
+  function getNoteW(i)   { return ((melody[i].duration || 1) / totalBeats) * pw; }
+  function getXCenter(i) { return getX(i) + getNoteW(i) * 0.5; }
+  function getY(p)       { return pad.t + ph - (p / maxP) * ph; }
+  function getPitch(n)   { return allNotes.findIndex(a => a.name === n.name && a.octave === n.octave); }
+
+  // ── Horizontal pitch grid ──
+  allNotes.forEach((note, p) => {
+    const y   = getY(p);
+    const isC = note.name === 'C';
+    ctx.strokeStyle = isC ? 'rgba(167,139,250,0.18)' : 'rgba(255,255,255,0.04)';
+    ctx.lineWidth   = isC ? 1 : 0.5;
+    ctx.setLineDash(isC ? [5,5] : []);
+    ctx.beginPath();
+    ctx.moveTo(pad.l, y);
+    ctx.lineTo(W - pad.r, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (isC) {
+      ctx.fillStyle    = 'rgba(167,139,250,0.45)';
+      ctx.font         = '9px monospace';
+      ctx.textAlign    = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`C${note.octave}`, pad.l - 4, y);
+    }
+  });
+
+  // ── Vertical beat / bar grid ──
+  for (let b = 0; b <= totalBeats; b += 0.25) {
+    const x      = pad.l + (b / totalBeats) * pw;
+    const isBar  = Number.isInteger(b / 4);
+    const isBeat = Number.isInteger(b);
+    ctx.fillStyle = isBar  ? 'rgba(167,139,250,0.20)' :
+                   isBeat  ? 'rgba(255,255,255,0.10)' :
+                              'rgba(255,255,255,0.04)';
+    ctx.fillRect(x, pad.t, isBar ? 1.5 : 1, ph);
+  }
+
+  // ── Smooth curve through note centres ──
+  const pts = melody.map((note, i) => ({ x: getXCenter(i), y: getY(getPitch(note)) }));
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  pts.forEach((pt, i) => {
+    if (i === 0) {
+      ctx.moveTo(pt.x, pt.y);
+    } else {
+      const cpx = (pts[i-1].x + pt.x) / 2;
+      ctx.bezierCurveTo(cpx, pts[i-1].y, cpx, pt.y, pt.x, pt.y);
+    }
+  });
+  ctx.stroke();
+
+  // ── Note blocks (width ∝ duration) ──
+  const dotH = Math.max(8, Math.min(22, ph / (maxP + 1)));
+
+  melody.forEach((note, i) => {
+    const p        = getPitch(note);
+    const t        = p / maxP;
+    const nw       = getNoteW(i);
+    const x        = getX(i);
+    const xc       = getXCenter(i);
+    const y        = getY(p);
+    const isActive = i === highlightIdx;
+    const dotW     = Math.max(4, nw * 0.85);
+
+    if (isActive) { ctx.shadowColor = 'rgba(251,191,36,0.8)'; ctx.shadowBlur = 16; }
+    ctx.fillStyle = isActive ? '#fbbf24' : pitchColor(t);
+    ctx.beginPath();
+    ctx.roundRect(x + (nw - dotW) / 2, y - dotH / 2, dotW, dotH, 4);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (nw > 30) {
+      ctx.fillStyle    = isActive ? '#1a1100' : 'rgba(255,255,255,0.9)';
+      ctx.font         = `bold ${Math.min(10, nw * 0.28)}px monospace`;
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${note.name}${note.octave}`, xc, y);
+    }
+  });
+}
+
+// ─── Note chips ──────────────────────────────────────────────────────────────
+
+function updateChips(activeIdx = -1) {
+  const strip = document.getElementById('noteStrip');
+  strip.innerHTML = '';
+  melody.forEach((note, i) => {
+    const chip = document.createElement('span');
+    chip.className  = 'chip' + (i === activeIdx ? ' active' : '');
+    chip.textContent = `${note.name}${note.octave}`;
+    chip.id = `chip${i}`;
+    strip.appendChild(chip);
+  });
+
+  if (activeIdx >= 0) {
+    const el = document.getElementById(`chip${activeIdx}`);
+    el?.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }
+}
+
+// ─── Generate & continuous loop ──────────────────────────────────────────────
+
+function toggleGenerating() {
+  const btn = document.getElementById('generateBtn');
+  if (continuousMode) {
+    stopAllModes();
+    btn.textContent = '▶ Generate & Play';
+    btn.classList.remove('generating');
+    document.getElementById('meta').textContent = 'Stopped.';
+  } else {
+    stopAllModes();
+    continuousMode = true;
+    btn.textContent = '■ Stop';
+    btn.classList.add('generating');
+    generateAndPlay();
+  }
+}
+
+function generateAndPlay() {
+  if (!continuousMode) return;
+
+  const ctx             = getCtx();
+  const numBars         = +document.getElementById('numBars').value;
+  const centerOct       = +document.getElementById('octave').value;
+  const bpm = +document.getElementById('bpm').value;
+  const spb       = 60 / bpm;
+
+  const lsDepth  = +document.getElementById('lsDepth').value;
+  // L-System: pool size grows with depth (8→16→32→64) so shallow depth
+  // cycles the short motif (literal repetition) while deep depth gives variety.
+  // Random walk: fixed large pool so the arch/probability shaping holds.
+  const pitchGen = algoMode === 'lsystem'
+    ? (_, oct) => generateMelodyLSystem(4 * Math.pow(2, lsDepth), oct, lsDepth)
+    : (n, oct) => generateMelody(n, oct, 65, 25, 7);
+
+  const sentence   = generateRhythmicMelody(numBars, centerOct, rhythmStyle, pitchGen);
+  const newMelody  = paragraphMode ? buildParagraph(sentence, centerOct)
+                   : sequenceMode  ? buildSequencedParagraph(sentence, centerOct)
+                   : fragmentMode  ? buildFragmentedParagraph(sentence, centerOct)
+                   : qaMode        ? buildQAParagraph(sentence, centerOct)
+                   : suiteMode     ? buildSuite(sentence, centerOct)
+                   : sentence;
+  const totalBeats = newMelody.reduce((s, n) => s + n.duration, 0);
+
+  // ── First call: bootstrap the audio clock ──
+  if (!isPlaying) {
+    nextAudioTime = ctx.currentTime + 0.05;
+    isPlaying = true;
+    tick();
+  }
+
+  // ── Schedule this melody's audio at exact AudioContext time ──
+  const startT = nextAudioTime;
+  scheduleOneMelody(newMelody, startT, spb);
+  nextAudioTime = startT + totalBeats * spb;
+
+  // ── Visual update: swap piano roll when this melody actually begins ──
+  const msUntilStart = Math.max(0, (startT - ctx.currentTime) * 1000);
+  setTimeout(() => {
+    if (!isPlaying && !continuousMode) return;
+    melody        = newMelody;
+    playStartTime = startT;
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('exportBtn').disabled = false;
+    document.getElementById('meta').textContent =
+      paragraphMode ? `${newMelody.length} notes · ${numBars * 4} bars [paragraph] · ${bpm} BPM · looping…`
+    : sequenceMode  ? `${newMelody.length} notes [sequence] · ${bpm} BPM · looping…`
+    : fragmentMode  ? `${newMelody.length} notes [fragment & develop] · ${bpm} BPM · looping…`
+    : qaMode        ? `${newMelody.length} notes [Q & A] · ${bpm} BPM · looping…`
+    : suiteMode     ? `${newMelody.length} notes [full suite: I–IV + coda] · ${bpm} BPM · looping…`
+    : `${newMelody.length} notes · ${numBars} bar${numBars > 1 ? 's' : ''} · ${bpm} BPM · looping…`;
+    drawRoll();
+    updateChips(-1);
+  }, msUntilStart);
+
+  // ── Trigger the next generation just before this melody ends ──
+  const msUntilNextGen = Math.max(0, (nextAudioTime - ctx.currentTime) * 1000 - 120);
+  setTimeout(() => {
+    if (continuousMode) generateAndPlay();
+  }, msUntilNextGen);
+}
+
+// ─── Export ──────────────────────────────────────────────────────────────────
+
+async function exportNotes() {
+  const bpm   = document.getElementById('bpm').value;
+  const dCode = d => d === 0.25 ? '16' : d === 0.5 ? '8' : d === 1.0 ? 'q' : d === 1.5 ? 'dq' : 'h';
+  const text  = `Melody (${document.querySelector('.scale-badge').textContent}) — ${bpm} BPM\n` +
+                melody.map(n => `${n.name}${n.octave}(${dCode(n.duration)})`).join(' ');
+
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch(_) {
+    // fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+
+  const btn = document.getElementById('exportBtn');
+  btn.textContent = '✓ Copied!';
+  setTimeout(() => (btn.textContent = '⬇ Copy Notes'), 2000);
+}
+
+// ─── Note picker ─────────────────────────────────────────────────────────────
+
+function renderNotePicker() {
+  const picker = document.getElementById('notePicker');
+  picker.innerHTML = '';
+  ALL_NOTES.forEach(name => {
+    const btn = document.createElement('button');
+    btn.className = 'note-key' +
+      (name.includes('#') ? ' sharp-key' : '') +
+      (activeNoteSet.has(name) ? ' on' : '');
+    btn.textContent = name;
+    btn.onclick = () => toggleNote(name);
+    picker.appendChild(btn);
+  });
+}
+
+function toggleNote(name) {
+  if (activeNoteSet.has(name)) {
+    if (activeNoteSet.size <= 2) return; // keep at least 2 notes
+    activeNoteSet.delete(name);
+  } else {
+    activeNoteSet.add(name);
+  }
+  renderNotePicker();
+  updateBadge();
+}
+
+function applyPreset(name) {
+  activeNoteSet = new Set(PRESETS[name]);
+  renderNotePicker();
+  updateBadge();
+}
+
+function updateBadge() {
+  const active = ALL_NOTES.filter(n => activeNoteSet.has(n));
+  const match  = Object.entries(PRESETS).find(([, notes]) =>
+    notes.length === active.length && notes.every(n => activeNoteSet.has(n)));
+  const presetLabels = { major:'Major', minor:'Minor', pent:'Penta', blues:'Blues', dorian:'Dorian', chrom:'Chromatic' };
+  const label = match ? (presetLabels[match[0]] || match[0]) : `${active.length} notes`;
+  document.querySelector('.scale-badge').textContent = `${getRootName()} ${label}`;
+}
+
+// ─── Slider wiring ───────────────────────────────────────────────────────────
+
+[
+  ['bpm',        'bpmVal',    v => `${v} BPM`],
+  ['volume',     'volumeVal', v => `${v}%`],
+  ['numBars',    'barsVal',   v => `${v} bar${v > 1 ? 's' : ''}`],
+  ['octave',     'octaveVal', v => v],
+  ['lsDepth',    'lsDepthVal', v => v],
+].forEach(([id, displayId, fmt]) => {
+  const el = document.getElementById(id);
+  const dv = document.getElementById(displayId);
+  el.addEventListener('input', () => (dv.textContent = fmt(el.value)));
+});
+
+// Volume slider updates master gain immediately (works mid-playback)
+document.getElementById('volume').addEventListener('input', e => {
+  if (masterGain) masterGain.gain.value = e.target.value / 100;
+});
+
+// ─── Resize ──────────────────────────────────────────────────────────────────
+
+window.addEventListener('resize', () => {
+  if (melody.length) drawRoll(activeNoteIdx);
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+renderNotePicker();
+updateBadge();
+
+// Keyboard shortcuts
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); toggleGenerating(); }
+  if (e.code === 'KeyG')  toggleGenerating();
+});
+</script>
+</body>
+</html>

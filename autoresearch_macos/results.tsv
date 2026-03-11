@@ -1,2 +1,5 @@
 commit	val_bpb	memory_gb	status	description
 4f11cea	1.923586	0.0	keep	baseline: depth=4 dim=256 batch=4 grad_accum=8 44steps
+663c481	1.872741	0.0	keep	exp1: TOTAL_BATCH_SIZE 2^16->2^13 grad_accum=1 165steps
+accc7bb	2.089605	0.0	discard	exp2: warmdown 0.5->0.2 (MPS throttled: only 70 steps)
+785ab43	2.417633	0.0	discard	exp3: depth=4->6 26Mparams too slow on MPS (only 13 steps)

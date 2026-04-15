@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Colour Composition Analyser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f7f6f3;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 32px 16px 64px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: #111;
+    }
+
+    header p {
+      margin-top: 8px;
+      color: #666;
+      font-size: 0.95rem;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    /* ── Upload state ── */
+    #upload-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #drop-zone {
+      width: 100%;
+      max-width: 480px;
+      border: 2px dashed #ccc;
+      border-radius: 16px;
+      background: #fff;
+      padding: 56px 32px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    #drop-zone.drag-over {
+      border-color: #888;
+      background: #f0efeb;
+    }
+
+    #drop-zone svg {
+      display: block;
+      margin: 0 auto 16px;
+      color: #aaa;
+    }
+
+    #drop-zone .dz-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    #drop-zone .dz-sub {
+      font-size: 0.85rem;
+      color: #999;
+    }
+
+    #file-input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* ── Results state ── */
+    #results-section {
+      display: none;
+    }
+
+    .results-top {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      margin-bottom: 28px;
+    }
+
+    #img-preview {
+      width: 200px;
+      min-width: 200px;
+      height: 200px;
+      object-fit: cover;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+      display: block;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .stat-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+
+    .stat-card .stat-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #999;
+      margin-bottom: 4px;
+    }
+
+    .stat-card .stat-value {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.05rem;
+      font-weight: 500;
+      color: #111;
+    }
+
+    /* ── Palette strip ── */
+    .section-title {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.1rem;
+      font-weight: 400;
+      margin-bottom: 10px;
+      color: #222;
+    }
+
+    .palette-strip {
+      display: flex;
+      height: 52px;
+      border-radius: 10px;
+      overflow: visible;
+      margin-bottom: 28px;
+      gap: 2px;
+    }
+
+    .palette-seg {
+      position: relative;
+      flex-shrink: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: flex-grow 0.2s ease;
+      overflow: visible;
+    }
+
+    .palette-seg:hover {
+      flex-grow: 2 !important;
+    }
+
+    .palette-seg:first-child { border-radius: 10px 6px 6px 10px; }
+    .palette-seg:last-child  { border-radius: 6px 10px 10px 6px; }
+
+    .palette-seg .seg-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #111;
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      padding: 5px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 10;
+    }
+
+    .palette-seg:hover .seg-tooltip { opacity: 1; }
+
+    .seg-copied-flash {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 20;
+      animation: fadeinout 1.5s forwards;
+    }
+
+    /* ── Colour list ── */
+    .colour-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 24px;
+    }
+
+    .colour-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background 0.15s;
+      position: relative;
+    }
+
+    .colour-row:hover { background: #f0efeb; }
+
+    .colour-swatch {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+    }
+
+    .colour-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .colour-name {
+      font-size: 0.88rem;
+      font-weight: 500;
+      color: #222;
+    }
+
+    .colour-hex {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      color: #888;
+    }
+
+    .colour-bar-wrap {
+      flex: 2;
+      height: 6px;
+      background: #eee;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .colour-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.4s ease;
+    }
+
+    .colour-pct {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      color: #555;
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .copied-tag {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #111;
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 5px;
+      pointer-events: none;
+      animation: fadeinout 1.5s forwards;
+    }
+
+    /* ── Action buttons ── */
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 20px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    button:hover { opacity: 0.85; }
+
+    .btn-primary {
+      background: #111;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #e8e7e3;
+      color: #333;
+    }
+
+    #copy-all-flash {
+      display: none;
+      align-items: center;
+      font-size: 0.85rem;
+      color: #555;
+      animation: fadeinout 2s forwards;
+    }
+
+    @keyframes fadeinout {
+      0%   { opacity: 0; }
+      15%  { opacity: 1; }
+      70%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 520px) {
+      .results-top {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #img-preview {
+        width: 100%;
+        height: 220px;
+        min-width: unset;
+      }
+    }
+
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Colour Composition Analyser</h1>
+    <p>Upload an image to extract its dominant colours — entirely in your browser.</p>
+  </header>
+
+  <div class="container">
+
+    <!-- Upload -->
+    <div id="upload-section">
+      <div id="drop-zone">
+        <input type="file" id="file-input" accept=".jpg,.jpeg,.png,.webp,.gif" />
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <div class="dz-title">Drop an image here or click to browse</div>
+        <div class="dz-sub">JPG, PNG, WEBP, GIF · any size</div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="results-section">
+      <div class="results-top">
+        <img id="img-preview" src="" alt="Preview" />
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Colours found</div>
+            <div class="stat-value" id="stat-colours">8</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Brightness</div>
+            <div class="stat-value" id="stat-brightness">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Saturation</div>
+            <div class="stat-value" id="stat-saturation">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Temperature</div>
+            <div class="stat-value" id="stat-temperature">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">Palette</div>
+      <div class="palette-strip" id="palette-strip"></div>
+
+      <div class="section-title">Dominant Colours</div>
+      <div class="colour-list" id="colour-list"></div>
+
+      <div class="actions">
+        <button class="btn-primary" id="btn-copy-all">Copy all hex codes</button>
+        <button class="btn-secondary" id="btn-reset">Analyse another</button>
+        <span id="copy-all-flash">Copied!</span>
+      </div>
+    </div>
+
+  </div>
+
+  <canvas id="hidden-canvas"></canvas>
+
+  <script>
+    // ── DOM refs ──
+    const dropZone       = document.getElementById('drop-zone');
+    const fileInput      = document.getElementById('file-input');
+    const uploadSection  = document.getElementById('upload-section');
+    const resultsSection = document.getElementById('results-section');
+    const imgPreview     = document.getElementById('img-preview');
+    const paletteStrip   = document.getElementById('palette-strip');
+    const colourList     = document.getElementById('colour-list');
+    const statBrightness = document.getElementById('stat-brightness');
+    const statSaturation = document.getElementById('stat-saturation');
+    const statTemperature= document.getElementById('stat-temperature');
+    const btnCopyAll     = document.getElementById('btn-copy-all');
+    const btnReset       = document.getElementById('btn-reset');
+    const copyAllFlash   = document.getElementById('copy-all-flash');
+    const canvas         = document.getElementById('hidden-canvas');
+    const ctx            = canvas.getContext('2d');
+
+    // ── Drag & drop ──
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+    // ── File handler ──
+    function handleFile(file) {
+      if (!file.type.match(/^image\//)) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        imgPreview.src = url;
+        analyse(img);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+    // ── Main analysis ──
+    function analyse(img) {
+      // Scale down to max 120px longest side
+      const MAX = 120;
+      const scale = Math.min(MAX / img.naturalWidth, MAX / img.naturalHeight, 1);
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+      canvas.width  = w;
+      canvas.height = h;
+      ctx.drawImage(img, 0, 0, w, h);
+
+      const imageData = ctx.getImageData(0, 0, w, h).data;
+      const totalPx   = w * h;
+
+      // Sample up to 2000 pixels
+      const MAX_SAMPLES = 2000;
+      const pixels = [];
+      const step = Math.max(1, Math.floor(totalPx / MAX_SAMPLES));
+      for (let i = 0; i < totalPx; i += step) {
+        const off = i * 4;
+        const a   = imageData[off + 3];
+        if (a < 128) continue;
+        pixels.push([imageData[off], imageData[off+1], imageData[off+2]]);
+      }
+
+      if (pixels.length === 0) return;
+
+      const clusters = kmeans(pixels, 8, 20);
+      clusters.sort((a, b) => b.count - a.count);
+
+      const total = clusters.reduce((s, c) => s + c.count, 0);
+
+      // Overall stats (weighted)
+      let wL = 0, wS = 0, wR = 0, wB = 0;
+      clusters.forEach(c => {
+        const hsl = rgbToHsl(...c.center);
+        const w   = c.count / total;
+        wL += hsl[2] * w;
+        wS += hsl[1] * w;
+        wR += c.center[0] * w;
+        wB += c.center[2] * w;
+      });
+
+      statBrightness.textContent  = wL < 0.35 ? 'Dark' : wL > 0.65 ? 'Light' : 'Mid';
+      statSaturation.textContent  = wS < 0.20 ? 'Muted' : wS > 0.55 ? 'Vibrant' : 'Moderate';
+      statTemperature.textContent = wR > wB ? 'Warm' : 'Cool';
+
+      // Build palette strip
+      paletteStrip.innerHTML = '';
+      clusters.forEach((c, i) => {
+        const pct = Math.round(c.count / total * 100);
+        const hex = rgbToHex(...c.center);
+        const seg = document.createElement('div');
+        seg.className   = 'palette-seg';
+        seg.style.flexGrow   = pct;
+        seg.style.background = hex;
+        seg.title = hex;
+
+        const tip = document.createElement('div');
+        tip.className   = 'seg-tooltip';
+        tip.textContent = `${hex}  ${pct}%`;
+        seg.appendChild(tip);
+
+        seg.addEventListener('click', () => {
+          copyText(hex);
+          showSegCopied(seg);
+        });
+        paletteStrip.appendChild(seg);
+      });
+
+      // Build colour list
+      colourList.innerHTML = '';
+      clusters.forEach(c => {
+        const pct  = Math.round(c.count / total * 100);
+        const hex  = rgbToHex(...c.center);
+        const name = colourName(...c.center);
+        const lum  = 0.299*c.center[0] + 0.587*c.center[1] + 0.114*c.center[2];
+
+        const row = document.createElement('div');
+        row.className = 'colour-row';
+
+        row.innerHTML = `
+          <div class="colour-swatch" style="background:${hex}"></div>
+          <div class="colour-info">
+            <div class="colour-name">${name}</div>
+            <div class="colour-hex">${hex}</div>
+          </div>
+          <div class="colour-bar-wrap">
+            <div class="colour-bar-fill" style="width:${pct}%;background:${hex}"></div>
+          </div>
+          <div class="colour-pct">${pct}%</div>
+        `;
+
+        row.addEventListener('click', () => {
+          copyText(hex);
+          // Remove any existing tag
+          row.querySelectorAll('.copied-tag').forEach(el => el.remove());
+          const tag = document.createElement('span');
+          tag.className   = 'copied-tag';
+          tag.textContent = 'Copied';
+          row.appendChild(tag);
+          tag.addEventListener('animationend', () => tag.remove());
+        });
+
+        colourList.appendChild(row);
+      });
+
+      // Store hexes for copy-all
+      btnCopyAll._hexes = clusters.map(c => rgbToHex(...c.center));
+
+      // Show results
+      uploadSection.style.display = 'none';
+      resultsSection.style.display = 'block';
+    }
+
+    // ── Copy all ──
+    btnCopyAll.addEventListener('click', () => {
+      copyText(btnCopyAll._hexes.join(', '));
+      copyAllFlash.style.display = 'flex';
+      copyAllFlash.style.animation = 'none';
+      void copyAllFlash.offsetWidth; // reflow
+      copyAllFlash.style.animation = 'fadeinout 2s forwards';
+      copyAllFlash.addEventListener('animationend', () => {
+        copyAllFlash.style.display = 'none';
+      }, { once: true });
+    });
+
+    // ── Reset ──
+    btnReset.addEventListener('click', () => {
+      fileInput.value = '';
+      resultsSection.style.display = 'none';
+      uploadSection.style.display  = 'flex';
+    });
+
+    // ── K-Means ──
+    function kmeans(pixels, k, iterations) {
+      // Pick k random starting centers
+      const shuffled = pixels.slice().sort(() => Math.random() - 0.5);
+      let centers = shuffled.slice(0, k).map(p => [...p]);
+
+      let assignments = new Array(pixels.length).fill(0);
+
+      for (let iter = 0; iter < iterations; iter++) {
+        // Assign
+        for (let i = 0; i < pixels.length; i++) {
+          let best = 0, bestDist = Infinity;
+          for (let j = 0; j < k; j++) {
+            const d = dist2(pixels[i], centers[j]);
+            if (d < bestDist) { bestDist = d; best = j; }
+          }
+          assignments[i] = best;
+        }
+        // Recompute centers
+        const sums   = Array.from({length: k}, () => [0,0,0]);
+        const counts = new Array(k).fill(0);
+        for (let i = 0; i < pixels.length; i++) {
+          const j = assignments[i];
+          sums[j][0] += pixels[i][0];
+          sums[j][1] += pixels[i][1];
+          sums[j][2] += pixels[i][2];
+          counts[j]++;
+        }
+        for (let j = 0; j < k; j++) {
+          if (counts[j] > 0) {
+            centers[j] = [sums[j][0]/counts[j], sums[j][1]/counts[j], sums[j][2]/counts[j]];
+          }
+        }
+      }
+
+      return centers.map((center, j) => ({
+        center: center.map(Math.round),
+        count: assignments.filter(a => a === j).length
+      })).filter(c => c.count > 0);
+    }
+
+    function dist2(a, b) {
+      return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2;
+    }
+
+    // ── RGB → Hex ──
+    function rgbToHex(r, g, b) {
+      return '#' + [r,g,b].map(v => Math.round(v).toString(16).padStart(2,'0')).join('').toUpperCase();
+    }
+
+    // ── RGB → HSL ──
+    function rgbToHsl(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const max = Math.max(r,g,b), min = Math.min(r,g,b);
+      let h, s, l = (max+min)/2;
+      if (max === min) { h = s = 0; }
+      else {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+          case g: h = ((b - r) / d + 2) / 6; break;
+          case b: h = ((r - g) / d + 4) / 6; break;
+        }
+      }
+      return [h * 360, s, l];
+    }
+
+    // ── Colour naming ──
+    function colourName(r, g, b) {
+      const [h, s, l] = rgbToHsl(r, g, b);
+
+      if (l < 0.10) return 'Black';
+      if (l > 0.90) return 'White';
+      if (s < 0.12) {
+        if (l < 0.35) return 'Dark gray';
+        if (l > 0.65) return 'Light gray';
+        return 'Gray';
+      }
+
+      let hue;
+      if (h < 15 || h >= 345)       hue = 'Red';
+      else if (h < 35)               hue = 'Orange';
+      else if (h < 65)               hue = 'Yellow';
+      else if (h < 80)               hue = 'Yellow-green';
+      else if (h < 150)              hue = 'Green';
+      else if (h < 185)              hue = 'Cyan';
+      else if (h < 255)              hue = 'Blue';
+      else if (h < 285)              hue = 'Indigo';
+      else if (h < 315)              hue = 'Violet';
+      else                           hue = 'Pink';
+
+      if (s < 0.35)  return `Muted ${hue}`;
+      if (l < 0.28)  return `Dark ${hue}`;
+      if (l > 0.72)  return `Light ${hue}`;
+      if (s > 0.75)  return `Vivid ${hue}`;
+      return hue;
+    }
+
+    // ── Clipboard ──
+    function copyText(text) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+      } else {
+        fallbackCopy(text);
+      }
+    }
+
+    function fallbackCopy(text) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity  = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+
+    // ── Segment copied flash ──
+    function showSegCopied(seg) {
+      seg.querySelectorAll('.seg-copied-flash').forEach(el => el.remove());
+      const flash = document.createElement('div');
+      flash.className   = 'seg-copied-flash';
+      flash.textContent = 'Copied';
+      seg.appendChild(flash);
+      flash.addEventListener('animationend', () => flash.remove());
+    }
+  </script>
+</body>
+</html>

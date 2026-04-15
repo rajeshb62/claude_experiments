@@ -1,0 +1,13 @@
+{
+  "name": "fx-conventional-payments",
+  "version": "1.0.0",
+  "description": "Conventional cross-border FX payment simulation — UAE AED to Mexico MXN",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

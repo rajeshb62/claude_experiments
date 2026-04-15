@@ -2,3 +2,14 @@
 node_modules/
 dist/
 *.lock
+venv/
+__pycache__/
+*.pyc
+separated/
+*.wav
+*.mp3
+*.h5
+*.dylib
+.env
+.env.local
+.env.*

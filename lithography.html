@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lithography Mask Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0c10;
+      --surface: #12161e;
+      --surface2: #1a2030;
+      --border: #2a3248;
+      --accent: #4fc3f7;
+      --accent2: #a78bfa;
+      --uv: #7c3aed;
+      --uv-glow: rgba(124,58,237,0.5);
+      --amber: #fbbf24;
+      --green: #34d399;
+      --red: #f87171;
+      --text: #e2e8f0;
+      --text-dim: #64748b;
+      --chrome: #374151;
+      --clear: rgba(180,220,255,0.08);
+      --resist: #d97706;
+      --silicon: #1e3a5f;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 0 0 60px;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #0d1117 0%, #161b27 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo {
+      width: 36px; height: 36px;
+      background: radial-gradient(circle, var(--uv) 0%, transparent 70%);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    header p {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding: 20px 32px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      padding: 10px 20px;
+      border-radius: 8px 8px 0 0;
+      border: 1px solid transparent;
+      border-bottom: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: var(--text-dim);
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .tab.active {
+      background: var(--surface);
+      border-color: var(--border);
+      color: var(--accent);
+    }
+
+    .tab:not(.active):hover { color: var(--text); }
+
+    /* ── Panels ── */
+    .panel {
+      display: none;
+      padding: 28px 32px;
+    }
+    .panel.active { display: block; }
+
+    /* ── Step-by-step ── */
+    .step-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 24px;
+    }
+
+    .step-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      font-size: 0.82rem;
+    }
+
+    .step-item.active {
+      background: var(--surface2);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .step-item:not(.active) { color: var(--text-dim); }
+    .step-item:not(.active):hover { background: var(--surface); color: var(--text); }
+
+    .step-num {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem;
+      font-weight: 600;
+      flex-shrink: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+
+    .step-item.done .step-num {
+      background: var(--green);
+      border-color: var(--green);
+      color: #000;
+    }
+    .step-item.active .step-num {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+    }
+
+    .step-content {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .step-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .step-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .step-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--surface2);
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+
+    .step-visual {
+      padding: 24px;
+      min-height: 320px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .step-desc {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .step-actions {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 8px 18px;
+      border-radius: 7px;
+      border: none;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-purple { background: var(--uv); color: #fff; }
+    .btn-purple:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Toggle ── */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.82rem;
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px; height: 24px;
+    }
+    .toggle input { display: none; }
+    .toggle-track {
+      position: absolute; inset: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .toggle input:checked + .toggle-track { background: var(--uv); border-color: var(--uv); }
+    .toggle-thumb {
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 16px; height: 16px;
+      background: #fff;
+      border-radius: 50%;
+      transition: left 0.2s;
+      pointer-events: none;
+    }
+    .toggle input:checked ~ .toggle-thumb { left: 23px; }
+
+    /* ── Three-panel view ── */
+    .three-panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+
+    .viz-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .viz-panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+    }
+
+    .viz-panel-body {
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 280px;
+      position: relative;
+    }
+
+    /* ── Canvas-based drawings ── */
+    canvas.viz { border-radius: 6px; display: block; }
+
+    /* ── Mask editor ── */
+    .editor-layout {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .editor-left { display: flex; flex-direction: column; gap: 16px; }
+
+    .grid-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .grid-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+
+    #mask-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 32px);
+      grid-template-rows: repeat(10, 32px);
+      gap: 2px;
+      cursor: crosshair;
+    }
+
+    .cell {
+      width: 32px; height: 32px;
+      border-radius: 3px;
+      transition: background 0.1s;
+    }
+    .cell.opaque  { background: #1f2937; }
+    .cell.clear   { background: rgba(150,210,255,0.15); border: 1px solid rgba(150,210,255,0.2); }
+    .cell:hover   { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+    .editor-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .editor-right {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .result-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .info-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      color: var(--text-dim);
+    }
+
+    .info-box strong { color: var(--text); }
+
+    /* ── Animated scene canvases ── */
+    #three-panel-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .light-anim-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .three-panels { grid-template-columns: 1fr; }
+      .step-layout  { grid-template-columns: 1fr; }
+      .editor-layout { grid-template-columns: 1fr; }
+      .result-row { grid-template-columns: 1fr; }
+    }
+
+    /* ── Glows ── */
+    .glow-uv { filter: drop-shadow(0 0 8px var(--uv-glow)); }
+    .glow-cyan { filter: drop-shadow(0 0 6px rgba(79,195,247,0.5)); }
+
+    /* ── Pill labels ── */
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .pill-positive { background: rgba(251,191,36,0.15); color: var(--amber); border: 1px solid rgba(251,191,36,0.3); }
+    .pill-negative { background: rgba(167,139,250,0.15); color: var(--accent2); border: 1px solid rgba(167,139,250,0.3); }
+
+    .resist-info {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      font-size: 0.82rem;
+    }
+    .resist-col h4 { margin-bottom: 6px; font-size: 0.82rem; }
+    .resist-col ul { list-style: none; }
+    .resist-col li { color: var(--text-dim); margin-bottom: 4px; line-height: 1.5; }
+    .resist-col li::before { content: '→ '; color: var(--accent); }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🔬</div>
+  <div>
+    <h1>Lithography Mask Simulator</h1>
+  </div>
+  <p>Semiconductor Manufacturing · Cleanroom Education</p>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="showTab('overview')">Overview</button>
+  <button class="tab" onclick="showTab('stepbystep')">Step-by-Step</button>
+  <button class="tab" onclick="showTab('resisttype')">Resist Types</button>
+  <button class="tab" onclick="showTab('editor')">Mask Editor</button>
+</div>
+
+<!-- ══ OVERVIEW TAB ══ -->
+<div id="tab-overview" class="panel active">
+  <div class="section-title">Live Animation · Three-Panel View</div>
+  <div class="three-panels">
+
+    <div class="viz-panel">
+      <div class="viz-panel-header">
+        <div class="dot" style="background:#7c3aed"></div>
+        Lithography Mask
+      </div>
+      <div class="viz-panel-body">
+        <canvas id="c-mask" class="viz" width="220" height="220"></canvas>
+      </div>
+    </div>
+
+    <div class="viz-panel">
+      <div class="viz-panel-header">
+        <div class="dot" style="background:#4fc3f7"></div>
+        UV Exposure
+      </div>
+      <div class="viz-panel-body" style="flex-direction:column; gap:0; padding:0; overflow:hidden;">
+        <canvas id="c-expose" class="viz" width="220" height="280" style="border-radius:0"></canvas>
+      </div>
+    </div>
+
+    <div class="viz-panel">
+      <div class="viz-panel-header">
+        <div class="dot" style="background:#34d399"></div>
+        Etched Wafer Result
+      </div>
+      <div class="viz-panel-body">
+        <canvas id="c-result" class="viz" width="220" height="220"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top:20px; display:flex; gap:12px; align-items:center;">
+    <button class="btn btn-purple" id="btn-animate" onclick="toggleAnimation()">▶ Start Animation</button>
+    <span style="font-size:0.82rem; color:var(--text-dim)">Watch how UV light passes through the mask and patterns the wafer below.</span>
+  </div>
+</div>
+
+<!-- ══ STEP-BY-STEP TAB ══ -->
+<div id="tab-stepbystep" class="panel">
+  <div class="step-layout">
+
+    <div class="step-nav" id="step-nav"></div>
+
+    <div class="step-content">
+      <div class="step-header">
+        <h2 id="s-title">Step 1</h2>
+        <span class="step-badge" id="s-badge">1 / 6</span>
+      </div>
+      <div class="step-visual" id="s-visual">
+        <canvas id="step-canvas" width="480" height="260"></canvas>
+      </div>
+      <div class="step-desc" id="s-desc"></div>
+      <div class="step-actions">
+        <button class="btn btn-secondary" id="btn-prev" onclick="changeStep(-1)">← Prev</button>
+        <button class="btn btn-primary" id="btn-next" onclick="changeStep(1)">Next →</button>
+        <span id="resist-toggle-wrap" style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+          <label class="toggle">
+            <input type="checkbox" id="resist-toggle" onchange="drawStep()" />
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+          <span style="font-size:0.82rem; color:var(--text-dim)">Negative resist</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ RESIST TYPES TAB ══ -->
+<div id="tab-resisttype" class="panel">
+  <div class="section-title">Positive vs Negative Photoresist</div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+    <div class="viz-panel">
+      <div class="viz-panel-header">
+        <div class="dot" style="background:var(--amber)"></div>
+        <span class="pill pill-positive">POSITIVE</span> Resist
+      </div>
+      <div class="viz-panel-body">
+        <canvas id="c-pos" width="200" height="200"></canvas>
+      </div>
+    </div>
+    <div class="viz-panel">
+      <div class="viz-panel-header">
+        <div class="dot" style="background:var(--accent2)"></div>
+        <span class="pill pill-negative">NEGATIVE</span> Resist
+      </div>
+      <div class="viz-panel-body">
+        <canvas id="c-neg" width="200" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="resist-info">
+    <div class="resist-col">
+      <h4 style="color:var(--amber)">Positive Resist</h4>
+      <ul>
+        <li>Exposed areas become soluble</li>
+        <li>Light breaks polymer chains</li>
+        <li>Washed away in developer</li>
+        <li>Result mirrors mask clear regions</li>
+        <li>Used in most modern IC fabs</li>
+      </ul>
+    </div>
+    <div class="resist-col">
+      <h4 style="color:var(--accent2)">Negative Resist</h4>
+      <ul>
+        <li>Exposed areas become insoluble</li>
+        <li>Light cross-links polymer chains</li>
+        <li>Unexposed areas washed away</li>
+        <li>Result is inverted from mask</li>
+        <li>Better adhesion, lower resolution</li>
+      </ul>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;">
+    <canvas id="c-compare" width="700" height="180" style="border-radius:10px; display:block; max-width:100%;"></canvas>
+  </div>
+</div>
+
+<!-- ══ MASK EDITOR TAB ══ -->
+<div id="tab-editor" class="panel">
+  <div class="editor-layout">
+
+    <div class="editor-left">
+      <div class="grid-wrap">
+        <div class="grid-label">Draw your mask · click to toggle</div>
+        <div id="mask-grid"></div>
+      </div>
+      <div class="editor-controls">
+        <div class="toggle-wrap">
+          <label class="toggle">
+            <input type="checkbox" id="editor-resist" onchange="renderEditorResult()" />
+            <div class="toggle-track"></div>
+            <div class="toggle-thumb"></div>
+          </label>
+          <span>Negative resist</span>
+        </div>
+        <button class="btn btn-secondary" onclick="clearMask()">Clear mask</button>
+        <button class="btn btn-secondary" onclick="presetCircuit()">Load preset circuit</button>
+        <button class="btn btn-primary" onclick="renderEditorResult()">▶ Simulate</button>
+      </div>
+    </div>
+
+    <div class="editor-right">
+      <div class="result-row">
+        <div>
+          <div class="section-title">Mask Preview</div>
+          <canvas id="c-ed-mask" width="280" height="280" style="border-radius:10px; display:block;"></canvas>
+        </div>
+        <div>
+          <div class="section-title">Etched Result</div>
+          <canvas id="c-ed-result" width="280" height="280" style="border-radius:10px; display:block;"></canvas>
+        </div>
+      </div>
+      <div class="info-box" id="editor-info">
+        <strong>How to use:</strong> Click cells on the grid to toggle opaque (dark) / clear (light) regions.
+        Then click <em>Simulate</em> to see what the etched wafer looks like.
+        Toggle <em>Negative resist</em> to invert the result.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════
+// Shared mask pattern (10×10 grid, 1=opaque/chrome, 0=clear)
+// ══════════════════════════════
+const DEFAULT_MASK = [
+  [1,1,1,1,0,0,1,1,1,1],
+  [1,0,0,1,0,0,1,0,0,1],
+  [1,0,0,0,0,0,0,0,0,1],
+  [1,0,0,1,0,0,1,0,0,1],
+  [0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0],
+  [1,0,0,1,0,0,1,0,0,1],
+  [1,0,0,0,0,0,0,0,0,1],
+  [1,0,0,1,0,0,1,0,0,1],
+  [1,1,1,1,0,0,1,1,1,1],
+];
+
+// ══════════════════════════════
+// Tabs
+// ══════════════════════════════
+function showTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'overview')    { setTimeout(drawOverview, 50); }
+  if (name === 'stepbystep')  { setTimeout(() => drawStep(), 50); }
+  if (name === 'resisttype')  { setTimeout(drawResistTypes, 50); }
+  if (name === 'editor')      { setTimeout(initEditor, 50); }
+}
+
+// ══════════════════════════════
+// Overview: three-panel canvases + animation
+// ══════════════════════════════
+let animRunning = false;
+let animFrame = 0;
+let animRaf = null;
+const MASK = DEFAULT_MASK;
+const COLS = 10, ROWS = 10;
+
+function drawOverview() {
+  drawMaskCanvas(document.getElementById('c-mask'), MASK, 220);
+  drawResultCanvas(document.getElementById('c-result'), MASK, 220, false);
+  drawExposeCanvas(0);
+}
+
+function toggleAnimation() {
+  const btn = document.getElementById('btn-animate');
+  if (animRunning) {
+    animRunning = false;
+    cancelAnimationFrame(animRaf);
+    btn.textContent = '▶ Start Animation';
+    drawExposeCanvas(0);
+  } else {
+    animRunning = true;
+    btn.textContent = '⏹ Stop Animation';
+    animFrame = 0;
+    animLoop();
+  }
+}
+
+function animLoop() {
+  if (!animRunning) return;
+  animFrame = (animFrame + 1) % 120;
+  drawExposeCanvas(animFrame / 120);
+  animRaf = requestAnimationFrame(animLoop);
+}
+
+function drawMaskCanvas(canvas, mask, size) {
+  const ctx = canvas.getContext('2d');
+  const cell = size / COLS;
+  ctx.clearRect(0, 0, size, size);
+
+  // Background plate (quartz)
+  ctx.fillStyle = 'rgba(180,220,255,0.04)';
+  ctx.fillRect(0, 0, size, size);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * cell, y = r * cell;
+      if (mask[r][c] === 1) {
+        // Chrome (opaque)
+        ctx.fillStyle = '#1e2738';
+        ctx.fillRect(x+1, y+1, cell-2, cell-2);
+        ctx.fillStyle = 'rgba(100,120,160,0.3)';
+        ctx.fillRect(x+1, y+1, cell-2, 2);
+        ctx.fillRect(x+1, y+1, 2, cell-2);
+      } else {
+        // Clear
+        ctx.fillStyle = 'rgba(150,210,255,0.08)';
+        ctx.fillRect(x+1, y+1, cell-2, cell-2);
+        ctx.strokeStyle = 'rgba(150,210,255,0.15)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x+1.5, y+1.5, cell-3, cell-3);
+      }
+    }
+  }
+
+  // Label
+  ctx.fillStyle = 'rgba(100,116,139,0.9)';
+  ctx.font = '500 11px Inter';
+  ctx.fillText('⬛ Chrome (opaque)', 6, size - 8);
+}
+
+function drawResultCanvas(canvas, mask, size, negative) {
+  const ctx = canvas.getContext('2d');
+  const cell = size / COLS;
+  ctx.clearRect(0, 0, size, size);
+
+  // Silicon base
+  ctx.fillStyle = '#0d1b2e';
+  ctx.fillRect(0, 0, size, size);
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = c * cell, y = r * cell;
+      const exposed = mask[r][c] === 0; // light passed through clear
+      const etched = negative ? !exposed : exposed;
+      if (etched) {
+        // Etched trench
+        ctx.fillStyle = '#0a121f';
+        ctx.fillRect(x+1, y+1, cell-2, cell-2);
+        ctx.fillStyle = 'rgba(79,195,247,0.12)';
+        ctx.fillRect(x+1, y+1, cell-2, cell-2);
+      } else {
+        // Silicon remaining
+        ctx.fillStyle = '#1e3a5f';
+        ctx.fillRect(x+1, y+1, cell-2, cell-2);
+        ctx.fillStyle = 'rgba(79,195,247,0.05)';
+        ctx.fillRect(x+1, y+1, cell-2, 3);
+      }
+    }
+  }
+
+  // Cyan grid lines
+  ctx.strokeStyle = 'rgba(79,195,247,0.08)';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= COLS; i++) {
+    ctx.beginPath(); ctx.moveTo(i*cell, 0); ctx.lineTo(i*cell, size); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i*cell); ctx.lineTo(size, i*cell); ctx.stroke();
+  }
+}
+
+function drawExposeCanvas(progress) {
+  const canvas = document.getElementById('c-expose');
+  const ctx = canvas.getContext('2d');
+  const W = 220, H = 280;
+  ctx.clearRect(0, 0, W, H);
+
+  // Dark background
+  ctx.fillStyle = '#080c12';
+  ctx.fillRect(0, 0, W, H);
+
+  // UV source at top
+  const srcY = 18;
+  const grad = ctx.createRadialGradient(W/2, srcY, 2, W/2, srcY, 60);
+  grad.addColorStop(0, 'rgba(167,139,250,0.9)');
+  grad.addColorStop(0.4, 'rgba(124,58,237,0.4)');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, 60);
+
+  // Source label
+  ctx.fillStyle = '#a78bfa';
+  ctx.font = '600 10px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('UV Light Source', W/2, 14);
+
+  // Mask strip
+  const maskY = 60, maskH = 40;
+  const cell = W / COLS;
+
+  ctx.fillStyle = 'rgba(20,28,45,0.95)';
+  ctx.fillRect(0, maskY, W, maskH);
+
+  for (let c = 0; c < COLS; c++) {
+    // Use row 4 of mask for the cross-section
+    const opaque = MASK[4][c] === 1;
+    const x = c * cell;
+    if (opaque) {
+      ctx.fillStyle = '#1e2738';
+      ctx.fillRect(x+1, maskY+4, cell-2, maskH-8);
+    } else {
+      ctx.fillStyle = 'rgba(150,210,255,0.07)';
+      ctx.fillRect(x+1, maskY+4, cell-2, maskH-8);
+    }
+  }
+
+  // Mask label
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 10px Inter';
+  ctx.textAlign = 'left';
+  ctx.fillText('Mask', 4, maskY + maskH - 4);
+
+  // Wafer+resist region
+  const waferY = 200, resistH = 20, waferH = 40;
+
+  // Animate light beams downward
+  const beamBottom = maskY + maskH + (waferY - maskY - maskH) * Math.min(progress * 2, 1);
+
+  for (let c = 0; c < COLS; c++) {
+    const opaque = MASK[4][c] === 1;
+    if (!opaque) {
+      const x = c * cell + 1;
+      const bw = cell - 2;
+      const beamGrad = ctx.createLinearGradient(0, maskY+maskH, 0, beamBottom);
+      beamGrad.addColorStop(0, 'rgba(167,139,250,0.7)');
+      beamGrad.addColorStop(1, 'rgba(167,139,250,0.0)');
+      ctx.fillStyle = beamGrad;
+      ctx.fillRect(x, maskY+maskH, bw, beamBottom - maskY - maskH);
+    }
+  }
+
+  // Photoresist layer
+  ctx.fillStyle = progress > 0.5 ? 'rgba(217,119,6,0.6)' : 'rgba(217,119,6,0.9)';
+  ctx.fillRect(0, waferY, W, resistH);
+  ctx.fillStyle = '#92400e';
+  ctx.font = '500 9px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillText('Photoresist', W/2, waferY + 13);
+
+  // Show exposed regions on resist
+  if (progress > 0.4) {
+    for (let c = 0; c < COLS; c++) {
+      if (MASK[4][c] === 0) {
+        const x = c * cell + 1;
+        const glow = ctx.createLinearGradient(0, waferY, 0, waferY+resistH);
+        glow.addColorStop(0, 'rgba(167,139,250,0.6)');
+        glow.addColorStop(1, 'rgba(167,139,250,0.1)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(x, waferY, cell-2, resistH);
+      }
+    }
+  }
+
+  // Silicon wafer
+  ctx.fillStyle = '#0d1b2e';
+  ctx.fillRect(0, waferY+resistH, W, waferH);
+  ctx.fillStyle = '#1e3a5f';
+  ctx.fillRect(0, waferY+resistH+4, W, waferH-4);
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 10px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('Silicon Wafer', W/2, waferY+resistH+20);
+
+  ctx.textAlign = 'left';
+}
+
+// ══════════════════════════════
+// Step-by-step
+// ══════════════════════════════
+const STEPS = [
+  {
+    title: 'Apply Photoresist',
+    desc: 'A light-sensitive polymer called photoresist is spun onto the silicon wafer at high speed (thousands of RPM), creating an ultra-thin uniform coating — typically 100nm to a few microns thick. The wafer is then baked gently to evaporate solvents.',
+    draw: drawStep1,
+  },
+  {
+    title: 'Align & Expose',
+    desc: 'The mask is precisely aligned over the wafer using fiducial marks. UV, deep-UV, or extreme-UV light is then shone through the mask. Clear (chrome-free) regions transmit light; opaque chrome regions block it. Where light hits, the resist undergoes a chemical change.',
+    draw: drawStep2,
+  },
+  {
+    title: 'Develop Resist',
+    desc: 'The wafer is immersed in a chemical developer solution. For positive resist: exposed areas dissolve away, leaving resist only in unexposed (masked) regions. For negative resist: unexposed areas dissolve, leaving the cross-linked exposed areas.',
+    draw: drawStep3,
+  },
+  {
+    title: 'Etch Silicon',
+    desc: 'With the patterned photoresist acting as a protective mask, the wafer is exposed to a chemical etchant (wet or dry plasma). Silicon is removed from the unprotected areas, transferring the pattern into the silicon itself.',
+    draw: drawStep4,
+  },
+  {
+    title: 'Strip Remaining Resist',
+    desc: 'The remaining photoresist is stripped away using a solvent or plasma ashing (O₂ plasma). This leaves the patterned silicon surface clean and ready for the next fabrication step — deposition, doping, or another lithography cycle.',
+    draw: drawStep5,
+  },
+  {
+    title: 'Final Circuit Pattern',
+    desc: 'The result: the mask pattern has been faithfully transferred into the silicon wafer. In a real chip this cycle repeats 30–100+ times with different masks to build up transistors, gates, metal wires, and insulating layers.',
+    draw: drawStep6,
+  },
+];
+
+let currentStep = 0;
+
+function initStepNav() {
+  const nav = document.getElementById('step-nav');
+  nav.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'step-item' + (i === currentStep ? ' active' : (i < currentStep ? ' done' : ''));
+    el.innerHTML = `<div class="step-num">${i < currentStep ? '✓' : i+1}</div><span>${s.title}</span>`;
+    el.onclick = () => { currentStep = i; drawStep(); };
+    nav.appendChild(el);
+  });
+}
+
+function drawStep() {
+  initStepNav();
+  const s = STEPS[currentStep];
+  document.getElementById('s-title').textContent = s.title;
+  document.getElementById('s-badge').textContent = `${currentStep+1} / ${STEPS.length}`;
+  document.getElementById('s-desc').textContent = s.desc;
+  document.getElementById('btn-prev').disabled = currentStep === 0;
+  document.getElementById('btn-next').disabled = currentStep === STEPS.length - 1;
+  const negative = document.getElementById('resist-toggle').checked;
+  s.draw(document.getElementById('step-canvas'), negative);
+}
+
+function changeStep(dir) {
+  currentStep = Math.max(0, Math.min(STEPS.length-1, currentStep+dir));
+  drawStep();
+}
+
+const STEP_MASK_ROW = [1,0,0,1,0,0,1,0,0,1]; // cross-section used for steps
+
+function stepBase(ctx, W, H) {
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#080c12';
+  ctx.fillRect(0,0,W,H);
+}
+
+function drawWafer(ctx, W, y, h, label) {
+  ctx.fillStyle = '#0f1f36';
+  ctx.fillRect(0, y, W, h);
+  ctx.fillStyle = '#1a3358';
+  ctx.fillRect(0, y+4, W, h-4);
+  if (label) {
+    ctx.fillStyle = '#4fc3f7';
+    ctx.font = '500 10px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, W/2, y + h/2 + 4);
+  }
+}
+
+function drawResistLayer(ctx, W, y, h, mask, negative, exposed) {
+  const cell = W / 10;
+  if (!exposed) {
+    // Full uniform resist
+    ctx.fillStyle = 'rgba(217,119,6,0.85)';
+    ctx.fillRect(0, y, W, h);
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '500 10px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText('Photoresist', W/2, y + h/2 + 4);
+  } else {
+    // Patterned resist
+    for (let c = 0; c < 10; c++) {
+      const opaque = mask[c] === 1;
+      const lightHit = !opaque;
+      let keepResist = negative ? lightHit : !lightHit;
+      if (keepResist) {
+        ctx.fillStyle = 'rgba(217,119,6,0.85)';
+        ctx.fillRect(c*cell, y, cell, h);
+      }
+    }
+  }
+}
+
+function drawStep1(canvas) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  stepBase(ctx, W, H);
+  drawWafer(ctx, W, H-80, 60, 'Silicon Wafer');
+
+  // Full resist on top of wafer
+  ctx.fillStyle = 'rgba(217,119,6,0.85)';
+  ctx.fillRect(0, H-100, W, 24);
+
+  // Spin arrow
+  ctx.strokeStyle = 'rgba(251,191,36,0.5)';
+  ctx.lineWidth = 1.5;
+  for (let x = 40; x < W; x += 80) {
+    ctx.beginPath();
+    ctx.arc(x, H-88, 10, 0, Math.PI*1.5);
+    ctx.stroke();
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.moveTo(x+10, H-88);
+    ctx.lineTo(x+14, H-84);
+    ctx.lineTo(x+14, H-92);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = '500 12px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('Photoresist (spin-coated)', W/2, H-106);
+
+  // Arrow showing spin
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 10px Inter';
+  ctx.fillText('← spinning at 3000 RPM →', W/2, H-120);
+}
+
+function drawStep2(canvas, negative) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  stepBase(ctx, W, H);
+
+  // UV source
+  const grad = ctx.createRadialGradient(W/2, 20, 4, W/2, 20, W/2);
+  grad.addColorStop(0, 'rgba(167,139,250,0.8)');
+  grad.addColorStop(0.5, 'rgba(124,58,237,0.3)');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, 80);
+  ctx.fillStyle = '#c4b5fd';
+  ctx.font = '600 11px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('UV Light Source', W/2, 16);
+
+  // Mask
+  const maskY = 60, maskH = 28;
+  const cell = W / 10;
+  ctx.fillStyle = '#0d1520';
+  ctx.fillRect(0, maskY, W, maskH);
+
+  STEP_MASK_ROW.forEach((v, c) => {
+    if (v === 1) {
+      ctx.fillStyle = '#1e2738';
+      ctx.fillRect(c*cell+1, maskY+3, cell-2, maskH-6);
+    } else {
+      // Beams
+      const bg = ctx.createLinearGradient(0, maskY+maskH, 0, H-100);
+      bg.addColorStop(0, 'rgba(167,139,250,0.55)');
+      bg.addColorStop(1, 'rgba(167,139,250,0.0)');
+      ctx.fillStyle = bg;
+      ctx.fillRect(c*cell+1, maskY+maskH, cell-2, H - 100 - maskY - maskH);
+    }
+  });
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 10px Inter';
+  ctx.textAlign = 'left';
+  ctx.fillText('Mask (cross-section)', 4, maskY-4);
+
+  // Resist with exposure marks
+  ctx.fillStyle = 'rgba(217,119,6,0.85)';
+  ctx.fillRect(0, H-100, W, 24);
+  STEP_MASK_ROW.forEach((v, c) => {
+    if (v === 0) {
+      ctx.fillStyle = 'rgba(167,139,250,0.5)';
+      ctx.fillRect(c*cell+1, H-100, cell-2, 24);
+      // purple dot
+      ctx.fillStyle = '#a78bfa';
+      ctx.font = '10px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText('★', c*cell+cell/2, H-85);
+    }
+  });
+  ctx.fillStyle = '#fbbf24';
+  ctx.font = '500 10px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('Resist being exposed (★ = UV hit)', W/2, H-108);
+
+  drawWafer(ctx, W, H-76, 56, 'Silicon Wafer');
+}
+
+function drawStep3(canvas, negative) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  stepBase(ctx, W, H);
+  drawWafer(ctx, W, H-80, 60, 'Silicon Wafer');
+
+  const cell = W / 10;
+  const ry = H-100, rh = 24;
+  drawResistLayer(ctx, W, ry, rh, STEP_MASK_ROW, negative, true);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 11px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText(negative ? 'Negative resist: exposed areas remain' : 'Positive resist: exposed areas dissolved', W/2, ry-8);
+
+  // Developer splash
+  ctx.fillStyle = 'rgba(56,189,248,0.12)';
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath();
+    ctx.arc(x + Math.random()*30, ry-20, 6+Math.random()*8, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '500 10px Inter';
+  ctx.fillText('↓ developer solution washing ↓', W/2, ry-28);
+}
+
+function drawStep4(canvas, negative) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  stepBase(ctx, W, H);
+
+  const cell = W / 10;
+
+  // Silicon with etched trenches
+  for (let c = 0; c < 10; c++) {
+    const opaque = STEP_MASK_ROW[c] === 1;
+    const lightHit = !opaque;
+    const hasResist = negative ? lightHit : !lightHit;
+    const x = c * cell;
+
+    if (!hasResist) {
+      // Etched trench
+      ctx.fillStyle = '#050d18';
+      ctx.fillRect(x+1, H-80, cell-2, 60);
+      ctx.fillStyle = 'rgba(79,195,247,0.1)';
+      ctx.fillRect(x+1, H-80, cell-2, 6);
+    } else {
+      ctx.fillStyle = '#1a3358';
+      ctx.fillRect(x+1, H-80, cell-2, 60);
+    }
+  }
+
+  // Resist still on top
+  drawResistLayer(ctx, W, H-100, 24, STEP_MASK_ROW, negative, true);
+
+  ctx.fillStyle = '#f87171';
+  ctx.font = '600 11px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('Plasma/Chemical Etch removing unprotected silicon', W/2, H-110);
+
+  // Etch arrows
+  ctx.strokeStyle = 'rgba(248,113,113,0.4)';
+  ctx.lineWidth = 1;
+  for (let c = 0; c < 10; c++) {
+    const opaque = STEP_MASK_ROW[c] === 1;
+    const lightHit = !opaque;
+    const hasResist = negative ? lightHit : !lightHit;
+    if (!hasResist) {
+      const x = c * cell + cell/2;
+      ctx.beginPath();
+      ctx.moveTo(x, H-105);
+      ctx.lineTo(x, H-82);
+      ctx.stroke();
+      ctx.fillStyle = '#f87171';
+      ctx.font = '10px Inter';
+      ctx.textAlign = 'center';
+      ctx.fillText('▼', x, H-82);
+    }
+  }
+}
+
+function drawStep5(canvas, negative) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  stepBase(ctx, W, H);
+
+  const cell = W / 10;
+
+  for (let c = 0; c < 10; c++) {
+    const opaque = STEP_MASK_ROW[c] === 1;
+    const lightHit = !opaque;
+    const wasEtched = negative ? opaque : lightHit;
+    const x = c * cell;
+
+    if (wasEtched) {
+      ctx.fillStyle = '#050d18';
+      ctx.fillRect(x+1, H-80, cell-2, 60);
+      ctx.fillStyle = 'rgba(79,195,247,0.1)';
+      ctx.fillRect(x+1, H-80, cell-2, 6);
+    } else {
+      ctx.fillStyle = '#1a3358';
+      ctx.fillRect(x+1, H-80, cell-2, 60);
+    }
+  }
+
+  // Partially stripped resist (fading)
+  ctx.globalAlpha = 0.3;
+  drawResistLayer(ctx, W, H-100, 24, STEP_MASK_ROW, negative, true);
+  ctx.globalAlpha = 1;
+
+  ctx.fillStyle = '#34d399';
+  ctx.font = '600 11px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('O₂ Plasma stripping remaining photoresist', W/2, H-110);
+
+  // Rising particles
+  ctx.fillStyle = 'rgba(217,119,6,0.4)';
+  for (let i = 0; i < 12; i++) {
+    ctx.beginPath();
+    ctx.arc(30 + i*18, H-95 - (i%4)*8, 3, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function drawStep6(canvas, negative) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  stepBase(ctx, W, H);
+
+  const cell = W / 10;
+
+  // Final result — clean silicon
+  for (let c = 0; c < 10; c++) {
+    const opaque = STEP_MASK_ROW[c] === 1;
+    const lightHit = !opaque;
+    const wasEtched = negative ? opaque : lightHit;
+    const x = c * cell;
+
+    if (wasEtched) {
+      ctx.fillStyle = '#050d18';
+      ctx.fillRect(x+1, H-80, cell-2, 60);
+    } else {
+      // Gleaming silicon ridge
+      ctx.fillStyle = '#1a3358';
+      ctx.fillRect(x+1, H-80, cell-2, 60);
+      const shine = ctx.createLinearGradient(x, H-80, x, H-60);
+      shine.addColorStop(0, 'rgba(79,195,247,0.2)');
+      shine.addColorStop(1, 'rgba(79,195,247,0.0)');
+      ctx.fillStyle = shine;
+      ctx.fillRect(x+1, H-80, cell-2, 20);
+    }
+  }
+
+  // Glow label
+  ctx.shadowColor = '#4fc3f7';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = '#4fc3f7';
+  ctx.font = '600 13px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('✓ Circuit Pattern Transferred to Silicon', W/2, H-92);
+  ctx.shadowBlur = 0;
+
+  // Legend
+  ctx.fillStyle = '#1a3358';
+  ctx.fillRect(W/2 - 80, H-40, 16, 16);
+  ctx.fillStyle = '#050d18';
+  ctx.fillRect(W/2 + 4, H-40, 16, 16);
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 10px Inter';
+  ctx.textAlign = 'left';
+  ctx.fillText('= ridge', W/2 - 60, H-28);
+  ctx.fillText('= trench', W/2 + 24, H-28);
+}
+
+// ══════════════════════════════
+// Resist Types
+// ══════════════════════════════
+function drawResistTypes() {
+  drawResistDiagram(document.getElementById('c-pos'), false);
+  drawResistDiagram(document.getElementById('c-neg'), true);
+  drawCompareBar();
+}
+
+function drawResistDiagram(canvas, negative) {
+  const ctx = canvas.getContext('2d');
+  const W = 200, H = 200;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#080c12';
+  ctx.fillRect(0,0,W,H);
+
+  const cell = W / 10;
+  const col = negative ? '#a78bfa' : '#fbbf24';
+
+  // Mask
+  const maskY = 20, maskH = 22;
+  STEP_MASK_ROW.forEach((v, c) => {
+    ctx.fillStyle = v===1 ? '#1e2738' : 'rgba(150,210,255,0.07)';
+    ctx.fillRect(c*cell+1, maskY, cell-2, maskH);
+  });
+  ctx.fillStyle = '#64748b';
+  ctx.font = '9px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('Mask', W/2, maskY-4);
+
+  // Beams
+  STEP_MASK_ROW.forEach((v, c) => {
+    if (v===0) {
+      const bg = ctx.createLinearGradient(0, maskY+maskH, 0, 90);
+      bg.addColorStop(0, 'rgba(167,139,250,0.5)');
+      bg.addColorStop(1, 'transparent');
+      ctx.fillStyle = bg;
+      ctx.fillRect(c*cell+1, maskY+maskH, cell-2, 90 - maskY - maskH);
+    }
+  });
+
+  // Resist
+  const ry = 90, rh = 18;
+  STEP_MASK_ROW.forEach((v, c) => {
+    const lightHit = v===0;
+    let keep = negative ? lightHit : !lightHit;
+    if (keep) {
+      ctx.fillStyle = col;
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(c*cell+1, ry, cell-2, rh);
+      ctx.globalAlpha = 1;
+    }
+  });
+
+  // Wafer
+  ctx.fillStyle = '#0f1f36';
+  ctx.fillRect(0, ry+rh, W, H - ry - rh);
+  ctx.fillStyle = '#1a3358';
+  ctx.fillRect(0, ry+rh+4, W, H - ry - rh - 4);
+
+  ctx.fillStyle = col;
+  ctx.font = '500 9px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText(negative ? 'Negative: exposed stays' : 'Positive: exposed removed', W/2, H-6);
+}
+
+function drawCompareBar() {
+  const canvas = document.getElementById('c-compare');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = 180;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0,0,W,H);
+
+  const labels = ['Mask\n(chrome)', 'UV Light', 'Positive\nResist Left', 'Negative\nResist Left', 'Etched\n(positive)', 'Etched\n(negative)'];
+  const cols = 10;
+  const colW = W / labels.length;
+  const cell = colW / cols;
+  const rowH = 24;
+
+  labels.forEach((lbl, li) => {
+    const ox = li * colW;
+
+    // Draw row
+    STEP_MASK_ROW.forEach((v, c) => {
+      const x = ox + c * cell;
+      let fill = '#111';
+      if (li === 0) fill = v===1 ? '#1e2738' : 'rgba(150,210,255,0.1)';
+      else if (li === 1) fill = v===0 ? 'rgba(167,139,250,0.5)' : '#111';
+      else if (li === 2) { const lh = v===0; fill = !lh ? 'rgba(217,119,6,0.8)' : 'rgba(0,0,0,0)'; }
+      else if (li === 3) { const lh = v===0; fill = lh ? 'rgba(167,139,250,0.7)' : 'rgba(0,0,0,0)'; }
+      else if (li === 4) { const lh = v===0; fill = lh ? '#050d18' : '#1a3358'; }
+      else if (li === 5) { const lh = v===0; fill = !lh ? '#050d18' : '#1a3358'; }
+      ctx.fillStyle = fill;
+      ctx.fillRect(x+1, 20, cell-2, rowH);
+    });
+
+    // Label
+    const lines = lbl.split('\n');
+    ctx.fillStyle = li===2 ? '#fbbf24' : li===3 ? '#a78bfa' : '#64748b';
+    ctx.font = '500 10px Inter';
+    ctx.textAlign = 'center';
+    lines.forEach((ln, i) => ctx.fillText(ln, ox+colW/2, 60 + i*14));
+  });
+
+  // Arrow between mask and result
+  ctx.fillStyle = '#334155';
+  ctx.font = '18px Inter';
+  ctx.textAlign = 'center';
+  ctx.fillText('→', W*2/6+colW/2, 32);
+}
+
+// ══════════════════════════════
+// Editor
+// ══════════════════════════════
+let editorMask = Array.from({length:10}, () => new Array(10).fill(1));
+
+function initEditor() {
+  presetCircuit();
+}
+
+function presetCircuit() {
+  editorMask = DEFAULT_MASK.map(r => [...r]);
+  renderEditorGrid();
+  renderEditorResult();
+}
+
+function clearMask() {
+  editorMask = Array.from({length:10}, () => new Array(10).fill(0));
+  renderEditorGrid();
+  renderEditorResult();
+}
+
+function renderEditorGrid() {
+  const grid = document.getElementById('mask-grid');
+  grid.innerHTML = '';
+  let dragging = false;
+  let dragVal = null;
+
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell ' + (editorMask[r][c] ? 'opaque' : 'clear');
+      cell.dataset.r = r; cell.dataset.c = c;
+
+      cell.addEventListener('mousedown', (e) => {
+        dragging = true;
+        dragVal = editorMask[r][c] ? 0 : 1;
+        editorMask[r][c] = dragVal;
+        cell.className = 'cell ' + (dragVal ? 'opaque' : 'clear');
+        renderEditorResult();
+        e.preventDefault();
+      });
+
+      cell.addEventListener('mouseover', () => {
+        if (dragging && dragVal !== null) {
+          editorMask[r][c] = dragVal;
+          cell.className = 'cell ' + (dragVal ? 'opaque' : 'clear');
+          renderEditorResult();
+        }
+      });
+
+      grid.appendChild(cell);
+    }
+  }
+
+  document.addEventListener('mouseup', () => { dragging = false; dragVal = null; }, { once: false });
+}
+
+function renderEditorResult() {
+  const negative = document.getElementById('editor-resist').checked;
+
+  // Mask preview
+  const mc = document.getElementById('c-ed-mask');
+  drawMaskCanvas(mc, editorMask, 280);
+
+  // Result
+  const rc = document.getElementById('c-ed-result');
+  drawResultCanvas(rc, editorMask, 280, negative);
+
+  const info = document.getElementById('editor-info');
+  const clearCount = editorMask.flat().filter(v=>v===0).length;
+  const opaqueCount = 100 - clearCount;
+  info.innerHTML = `<strong>Mask stats:</strong> ${opaqueCount} opaque cells · ${clearCount} clear cells<br>
+  <strong>Resist:</strong> ${negative ? '<span style="color:var(--accent2)">Negative</span> — exposed regions stay, unexposed etch' : '<span style="color:var(--amber)">Positive</span> — unexposed regions stay, exposed etch'}<br>
+  Tip: drag to paint multiple cells at once.`;
+}
+
+// ══════════════════════════════
+// Init on load
+// ══════════════════════════════
+window.addEventListener('load', () => {
+  drawOverview();
+  drawStep();
+  document.addEventListener('mouseup', () => {});
+});
+</script>
+
+</body>
+</html>

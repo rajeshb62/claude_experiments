@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>x402 Pay-Per-API-Call Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #e6edf3;
+      font-family: 'Courier New', Courier, monospace;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      color: #58a6ff;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      color: #8b949e;
+      font-size: 0.85rem;
+      margin-bottom: 28px;
+    }
+
+    /* ── Flow Steps ── */
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      row-gap: 8px;
+    }
+    .step-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid #30363d;
+      background: #161b22;
+      color: #8b949e;
+      font-size: 0.78rem;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+    .step-pill .num {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #30363d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+    .step-pill.active {
+      border-color: #1f6feb;
+      color: #58a6ff;
+      background: #0d2045;
+    }
+    .step-pill.active .num { background: #1f6feb; color: #fff; }
+    .step-pill.done {
+      border-color: #238636;
+      color: #3fb950;
+      background: #0a1f10;
+    }
+    .step-pill.done .num { background: #238636; color: #fff; }
+    .step-pill.error {
+      border-color: #da3633;
+      color: #f85149;
+      background: #200f0f;
+    }
+    .step-pill.error .num { background: #da3633; color: #fff; }
+
+    .arrow {
+      color: #30363d;
+      font-size: 1.1rem;
+      padding: 0 4px;
+    }
+
+    /* ── Action Bar ── */
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    button {
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #btn-get {
+      background: #238636;
+      color: #fff;
+    }
+    #btn-get:hover:not(:disabled) { background: #2ea043; }
+
+    #btn-pay {
+      background: #1f6feb;
+      color: #fff;
+      display: none;
+    }
+    #btn-pay:hover:not(:disabled) { background: #388bfd; }
+
+    #btn-reset {
+      background: transparent;
+      color: #8b949e;
+      border: 1px solid #30363d;
+      display: none;
+    }
+    #btn-reset:hover { color: #e6edf3; border-color: #8b949e; }
+
+    .status-badge {
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: bold;
+    }
+    .badge-402 { background: #da3633; color: #fff; }
+    .badge-200 { background: #238636; color: #fff; }
+
+    /* ── Panels ── */
+    .panels {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+    }
+    .panel.visible { display: block; }
+    .panel.highlight-402 { border-color: #da3633; }
+    .panel.highlight-200 { border-color: #238636; }
+    .panel.highlight-sign { border-color: #e3b341; }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: #0d1117;
+      border-bottom: 1px solid #30363d;
+      font-size: 0.78rem;
+      color: #8b949e;
+    }
+    .panel-label {
+      font-weight: bold;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-red { background: #f85149; }
+    .dot-yellow { background: #e3b341; }
+    .dot-green { background: #3fb950; }
+    .dot-blue { background: #58a6ff; }
+
+    .panel-body {
+      padding: 14px;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      max-height: 420px;
+      overflow-y: auto;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .http-method { color: #79c0ff; font-weight: bold; }
+    .http-path { color: #e6edf3; }
+    .http-version { color: #8b949e; }
+    .http-header-name { color: #f0883e; }
+    .http-header-value { color: #a5d6ff; }
+    .http-status-402 { color: #f85149; font-weight: bold; }
+    .http-status-200 { color: #3fb950; font-weight: bold; }
+
+    .json-key { color: #79c0ff; }
+    .json-str { color: #a5d6ff; }
+    .json-num { color: #79c0ff; }
+    .json-bool { color: #ff7b72; }
+
+    .joke-box {
+      background: #0d2045;
+      border: 1px solid #1f6feb;
+      border-radius: 6px;
+      padding: 14px;
+      margin-top: 10px;
+      font-size: 0.95rem;
+      color: #e6edf3;
+      line-height: 1.5;
+    }
+
+    .loading {
+      color: #8b949e;
+      font-style: italic;
+    }
+    .spinner {
+      display: inline-block;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: bold;
+      margin-left: 6px;
+    }
+    .tag-req { background: #1f6feb33; color: #58a6ff; border: 1px solid #1f6feb66; }
+    .tag-res { background: #23863633; color: #3fb950; border: 1px solid #23863666; }
+    .tag-sign { background: #e3b34133; color: #e3b341; border: 1px solid #e3b34166; }
+
+    .info-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }
+    .info-label { color: #8b949e; min-width: 120px; }
+    .info-value { color: #e6edf3; word-break: break-all; }
+    .info-value.mono { font-family: monospace; font-size: 0.75rem; }
+
+    .separator { border: none; border-top: 1px solid #30363d; margin: 12px 0; }
+
+    .warn {
+      background: #e3b34122;
+      border: 1px solid #e3b34155;
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: #e3b341;
+      font-size: 0.78rem;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>x402 Pay-Per-API-Call Demo</h1>
+  <p class="subtitle">Demonstrating the x402 HTTP payment protocol on Base Sepolia testnet · $0.001 USDC per joke</p>
+
+  <!-- Flow steps -->
+  <div class="flow">
+    <div class="step-pill" id="step-1"><div class="num">1</div> Request</div>
+    <div class="arrow">→</div>
+    <div class="step-pill" id="step-2"><div class="num">2</div> 402 Required</div>
+    <div class="arrow">→</div>
+    <div class="step-pill" id="step-3"><div class="num">3</div> Sign Payment</div>
+    <div class="arrow">→</div>
+    <div class="step-pill" id="step-4"><div class="num">4</div> Retry</div>
+    <div class="arrow">→</div>
+    <div class="step-pill" id="step-5"><div class="num">5</div> Response</div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="action-bar">
+    <button id="btn-get" onclick="getJoke()">⚡ Get Joke</button>
+    <button id="btn-pay" onclick="payAndRetry()" style="display:none">💳 Pay &amp; Retry</button>
+    <button id="btn-reset" onclick="reset()">↺ Reset</button>
+    <span id="status-badge"></span>
+  </div>
+
+  <div id="joke-result" style="display:none;background:#0d2045;border:1px solid #1f6feb;border-radius:8px;padding:18px 20px;margin-bottom:16px;font-size:1.1rem;line-height:1.6;color:#e6edf3;">
+    💬 <span id="joke-text"></span>
+  </div>
+
+  <div id="warn-no-key" class="warn" style="display:none">
+    ⚠️ <strong>PAYER_PRIVATE_KEY</strong> not set in <code>.env</code> — the "Pay &amp; Retry" step will fail.
+    Add a Base Sepolia test wallet private key (see README).
+  </div>
+
+  <!-- HTTP panels -->
+  <div class="panels">
+
+    <!-- Panel 1: Initial Request -->
+    <div class="panel" id="panel-request">
+      <div class="panel-header">
+        <div class="panel-label"><div class="dot dot-blue"></div> HTTP Request <span class="tag tag-req">STEP 1</span></div>
+        <span>GET /api/joke</span>
+      </div>
+      <div class="panel-body" id="panel-request-body"></div>
+    </div>
+
+    <!-- Panel 2: 402 Response -->
+    <div class="panel" id="panel-402">
+      <div class="panel-header">
+        <div class="panel-label"><div class="dot dot-red"></div> HTTP Response <span class="tag tag-res">STEP 2</span></div>
+        <span class="http-status-402">402 Payment Required</span>
+      </div>
+      <div class="panel-body" id="panel-402-body"></div>
+    </div>
+
+    <!-- Panel 3: Signed Payment -->
+    <div class="panel" id="panel-sign">
+      <div class="panel-header">
+        <div class="panel-label"><div class="dot dot-yellow"></div> Payment Signed <span class="tag tag-sign">STEP 3</span></div>
+        <span>ERC-3009 transferWithAuthorization</span>
+      </div>
+      <div class="panel-body" id="panel-sign-body"></div>
+    </div>
+
+    <!-- Panel 4: Retry Request -->
+    <div class="panel" id="panel-retry">
+      <div class="panel-header">
+        <div class="panel-label"><div class="dot dot-blue"></div> Retry Request <span class="tag tag-req">STEP 4</span></div>
+        <span>GET /api/joke + X-Payment</span>
+      </div>
+      <div class="panel-body" id="panel-retry-body"></div>
+    </div>
+
+    <!-- Panel 5: Success Response -->
+    <div class="panel" id="panel-200">
+      <div class="panel-header">
+        <div class="panel-label"><div class="dot dot-green"></div> HTTP Response <span class="tag tag-res">STEP 5</span></div>
+        <span class="http-status-200">200 OK</span>
+      </div>
+      <div class="panel-body" id="panel-200-body"></div>
+    </div>
+
+  </div>
+
+  <script>
+    let paymentRequirements = null;
+    let config = {};
+
+    // Load config on startup
+    fetch('/api/config')
+      .then(r => r.json())
+      .then(c => {
+        config = c;
+        if (!c.hasDemoPayerKey) {
+          document.getElementById('warn-no-key').style.display = 'block';
+        }
+      })
+      .catch(() => {});
+
+    function setStep(n, state) {
+      const el = document.getElementById(`step-${n}`);
+      el.className = `step-pill ${state}`;
+    }
+    function resetSteps() {
+      for (let i = 1; i <= 5; i++) setStep(i, '');
+    }
+
+    function showPanel(id, extraClass = '') {
+      const el = document.getElementById(id);
+      el.className = `panel visible ${extraClass}`;
+    }
+
+    function setStatus(html) {
+      document.getElementById('status-badge').innerHTML = html;
+    }
+
+    function syntaxJson(obj) {
+      return JSON.stringify(obj, null, 2)
+        .replace(/("[\w@:/.\-]+")\s*:/g, '<span class="json-key">$1</span>:')
+        .replace(/:\s*("(?:[^"\\]|\\.)*")/g, ': <span class="json-str">$1</span>')
+        .replace(/:\s*(\d+\.?\d*)/g, ': <span class="json-num">$1</span>')
+        .replace(/:\s*(true|false|null)/g, ': <span class="json-bool">$1</span>');
+    }
+
+    function httpLine(parts) {
+      return parts.join('');
+    }
+
+    async function getJoke() {
+      resetSteps();
+      document.getElementById('btn-pay').style.display = 'none';
+      document.getElementById('btn-reset').style.display = 'none';
+      paymentRequirements = null;
+
+      ['panel-request','panel-402','panel-sign','panel-retry','panel-200'].forEach(id => {
+        document.getElementById(id).className = 'panel';
+      });
+
+      setStep(1, 'active');
+      document.getElementById('btn-get').disabled = true;
+
+      // Show request panel
+      showPanel('panel-request');
+      document.getElementById('panel-request-body').innerHTML = `
+<pre><span class="http-method">GET</span> <span class="http-path">/api/joke</span> <span class="http-version">HTTP/1.1</span>
+<span class="http-header-name">Host:</span> <span class="http-header-value">localhost:${location.port || 3000}</span>
+<span class="http-header-name">Accept:</span> <span class="http-header-value">application/json</span>
+<span class="http-header-name">Origin:</span> <span class="http-header-value">${location.origin}</span></pre>`;
+
+      setStatus('<span class="status-badge badge-402" style="opacity:.5">Sending...</span>');
+
+      const t0 = performance.now();
+      let resp, body;
+      try {
+        resp = await fetch('/api/joke', { headers: { 'Accept': 'application/json' } });
+        body = await resp.json();
+      } catch (e) {
+        setStatus('');
+        setStep(1, 'error');
+        document.getElementById('btn-get').disabled = false;
+        alert('Network error: ' + e.message);
+        return;
+      }
+      const ms = Math.round(performance.now() - t0);
+
+      if (resp.status === 402) {
+        // Payment requirements are in the `payment-required` header (base64 JSON), body is always {}
+        const prHeader = resp.headers.get('payment-required');
+        paymentRequirements = prHeader ? JSON.parse(atob(prHeader)) : body;
+
+        setStep(1, 'done');
+        setStep(2, 'active');
+        setStatus('<span class="status-badge badge-402">402 Payment Required</span>');
+
+        const req402 = paymentRequirements.accepts?.[0] || {};
+        // amount is in base units (e.g. "1000" = 0.001 USDC with 6 decimals)
+        const usdcAmount = req402.amount ? (Number(req402.amount) / 1e6).toFixed(4) : '?';
+        const description = paymentRequirements.resource?.description || req402.description || '';
+
+        showPanel('panel-402', 'highlight-402');
+        document.getElementById('panel-402-body').innerHTML = `
+<div style="margin-bottom:10px;color:#8b949e;font-size:0.75rem">${ms}ms · x402Version ${paymentRequirements.x402Version}</div>
+<pre style="margin-bottom:10px"><span class="http-status-402">HTTP/1.1 402 Payment Required</span>
+<span class="http-header-name">payment-required:</span> <span class="http-header-value">[base64 JSON ↓]</span></pre>
+<div class="info-row"><span class="info-label">Error:</span><span class="info-value" style="color:#f85149">${paymentRequirements.error}</span></div>
+<div class="info-row"><span class="info-label">Scheme:</span><span class="info-value">${req402.scheme}</span></div>
+<div class="info-row"><span class="info-label">Network:</span><span class="info-value">${req402.network}</span></div>
+<div class="info-row"><span class="info-label">Amount:</span><span class="info-value" style="color:#e3b341">${usdcAmount} USDC (${req402.amount} units)</span></div>
+<div class="info-row"><span class="info-label">Pay To:</span><span class="info-value mono">${req402.payTo}</span></div>
+<div class="info-row"><span class="info-label">Asset:</span><span class="info-value mono" style="font-size:0.72rem">${req402.asset}</span></div>
+<div class="info-row"><span class="info-label">Timeout:</span><span class="info-value">${req402.maxTimeoutSeconds}s</span></div>
+<div class="info-row"><span class="info-label">Description:</span><span class="info-value">${description}</span></div>
+<hr class="separator"/>
+<div style="color:#8b949e;font-size:0.75rem;margin-bottom:6px">Decoded payment-required header:</div>
+<pre>${syntaxJson(paymentRequirements)}</pre>`;
+
+        setStep(2, 'done');
+        document.getElementById('btn-reset').style.display = 'inline-block';
+        // Automatically proceed to payment — no manual click needed
+        payAndRetry();
+
+      } else if (resp.status === 200) {
+        // Already has payment (unlikely in normal flow)
+        showSuccess(body, ms, '(no payment header — free access)');
+      } else {
+        setStep(1, 'error');
+        setStatus(`<span style="color:#f85149">Error ${resp.status}</span>`);
+        document.getElementById('btn-get').disabled = false;
+        document.getElementById('btn-reset').style.display = 'inline-block';
+      }
+    }
+
+    async function payAndRetry() {
+      if (!paymentRequirements) return;
+
+      document.getElementById('btn-pay').disabled = true;
+      document.getElementById('btn-get').disabled = true;
+      setStep(3, 'active');
+      setStatus('<span class="status-badge" style="background:#e3b34144;color:#e3b341">Signing...</span>');
+
+      showPanel('panel-sign', 'highlight-sign');
+      document.getElementById('panel-sign-body').innerHTML = `<p class="loading"><span class="spinner">⟳</span> Creating ERC-3009 payment authorization...</p>`;
+
+      let signResult;
+      try {
+        const signResp = await fetch('/api/demo-payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paymentRequirements }),
+        });
+        signResult = await signResp.json();
+        if (!signResp.ok) throw new Error(signResult.error || 'Signing failed');
+      } catch (e) {
+        setStep(3, 'error');
+        document.getElementById('panel-sign-body').innerHTML = `<p style="color:#f85149">❌ ${e.message}</p>`;
+        document.getElementById('btn-pay').disabled = false;
+        document.getElementById('btn-get').disabled = false;
+        return;
+      }
+
+      const auth = signResult.paymentPayload?.payload?.authorization || {};
+      document.getElementById('panel-sign-body').innerHTML = `
+<div style="margin-bottom:10px;color:#3fb950;font-size:0.78rem">✓ EIP-712 signature created</div>
+<div class="info-row"><span class="info-label">Payer:</span><span class="info-value mono" style="font-size:0.72rem">${auth.from}</span></div>
+<div class="info-row"><span class="info-label">Recipient:</span><span class="info-value mono" style="font-size:0.72rem">${auth.to}</span></div>
+<div class="info-row"><span class="info-label">Value:</span><span class="info-value">${auth.value} units (0.001 USDC)</span></div>
+<div class="info-row"><span class="info-label">Valid Before:</span><span class="info-value">${new Date(Number(auth.validBefore) * 1000).toISOString()}</span></div>
+<div class="info-row"><span class="info-label">Nonce:</span><span class="info-value mono" style="font-size:0.7rem">${auth.nonce}</span></div>
+<hr class="separator"/>
+<div style="color:#8b949e;font-size:0.75rem;margin-bottom:4px">X-Payment header (base64):</div>
+<pre style="font-size:0.7rem;color:#a5d6ff;word-break:break-all">${signResult.paymentHeader}</pre>`;
+
+      setStep(3, 'done');
+      setStep(4, 'active');
+      setStatus('<span class="status-badge" style="background:#1f6feb44;color:#58a6ff">Retrying...</span>');
+
+      // Show retry request panel
+      showPanel('panel-retry');
+      const shortHeader = signResult.paymentHeader.substring(0, 40) + '...[truncated]';
+      document.getElementById('panel-retry-body').innerHTML = `
+<pre><span class="http-method">GET</span> <span class="http-path">/api/joke</span> <span class="http-version">HTTP/1.1</span>
+<span class="http-header-name">Host:</span> <span class="http-header-value">localhost:${location.port || 3000}</span>
+<span class="http-header-name">Accept:</span> <span class="http-header-value">application/json</span>
+<span class="http-header-name">X-Payment:</span> <span class="http-header-value" style="color:#e3b341">${shortHeader}</span></pre>
+<div style="margin-top:10px;color:#8b949e;font-size:0.75rem">↑ Payment header contains the ERC-3009 signed authorization — validated by Coinbase facilitator</div>`;
+
+      // Make the actual paid request
+      const t0 = performance.now();
+      let resp, body;
+      try {
+        resp = await fetch('/api/joke', {
+          headers: {
+            'Accept': 'application/json',
+            'X-Payment': signResult.paymentHeader,      // accepted by middleware
+            'payment-signature': signResult.paymentHeader, // preferred by @x402/express
+          },
+        });
+        body = await resp.json();
+      } catch (e) {
+        setStep(4, 'error');
+        setStatus(`<span style="color:#f85149">Network error</span>`);
+        document.getElementById('btn-pay').disabled = false;
+        document.getElementById('btn-get').disabled = false;
+        return;
+      }
+      const ms = Math.round(performance.now() - t0);
+
+      setStep(4, 'done');
+
+      if (resp.status === 200) {
+        const xPaymentResponse = resp.headers.get('x-payment-response') || resp.headers.get('X-Payment-Response');
+        showSuccess(body, ms, signResult.payerAddress, xPaymentResponse);
+      } else {
+        setStep(5, 'error');
+        setStatus(`<span class="status-badge badge-402">${resp.status} Error</span>`);
+        showPanel('panel-200', 'highlight-402');
+        document.getElementById('panel-200-body').innerHTML = `
+<pre style="color:#f85149">${syntaxJson(body)}</pre>
+<div style="margin-top:10px;color:#8b949e;font-size:0.75rem">
+  Facilitator rejected the payment. Ensure your PAYER_PRIVATE_KEY wallet has testnet USDC.<br/>
+  Get some from the <a href="https://faucet.circle.com/" target="_blank" style="color:#58a6ff">Circle faucet</a>.
+</div>`;
+        document.getElementById('btn-pay').disabled = false;
+        document.getElementById('btn-get').disabled = false;
+        document.getElementById('btn-reset').style.display = 'inline-block';
+      }
+    }
+
+    function showSuccess(body, ms, payerInfo, xPaymentResponse) {
+      setStep(5, 'done');
+      setStatus('<span class="status-badge badge-200">200 OK — Paid!</span>');
+
+      // Show joke prominently near the top
+      document.getElementById('joke-text').textContent = body.joke;
+      document.getElementById('joke-result').style.display = 'block';
+
+      showPanel('panel-200', 'highlight-200');
+      let xprHtml = '';
+      if (xPaymentResponse) {
+        xprHtml = `
+<hr class="separator"/>
+<div style="color:#8b949e;font-size:0.75rem;margin-bottom:4px">X-Payment-Response header:</div>
+<pre style="font-size:0.7rem;color:#a5d6ff;word-break:break-all">${xPaymentResponse}</pre>`;
+      }
+      document.getElementById('panel-200-body').innerHTML = `
+<div class="joke-box">💬 ${body.joke}</div>
+<hr class="separator"/>
+<div style="margin-bottom:10px;color:#8b949e;font-size:0.75rem">${ms}ms · Payment verified by Coinbase facilitator</div>
+<pre><span class="http-status-200">HTTP/1.1 200 OK</span>
+<span class="http-header-name">Content-Type:</span> <span class="http-header-value">application/json</span>
+<span class="http-header-name">X-Payment-Response:</span> <span class="http-header-value" style="color:#3fb950">[settlement proof]</span></pre>
+<hr class="separator"/>
+<div style="color:#8b949e;font-size:0.75rem;margin-bottom:6px">Response body:</div>
+<pre>${syntaxJson(body)}</pre>
+${xprHtml}
+<hr class="separator"/>
+<div class="info-row" style="margin-top:4px"><span class="info-label" style="font-size:0.75rem">Paid by:</span><span class="info-value mono" style="font-size:0.72rem;color:#3fb950">${payerInfo || 'unknown'}</span></div>`;
+
+      document.getElementById('btn-pay').style.display = 'none';
+      document.getElementById('btn-get').disabled = false;
+      document.getElementById('btn-reset').style.display = 'inline-block';
+    }
+
+    function reset() {
+      resetSteps();
+      paymentRequirements = null;
+      document.getElementById('joke-result').style.display = 'none';
+      document.getElementById('joke-text').textContent = '';
+      ['panel-request','panel-402','panel-sign','panel-retry','panel-200'].forEach(id => {
+        document.getElementById(id).className = 'panel';
+      });
+      document.getElementById('btn-pay').style.display = 'none';
+      document.getElementById('btn-reset').style.display = 'none';
+      document.getElementById('btn-pay').disabled = false;
+      document.getElementById('btn-get').disabled = false;
+      document.getElementById('status-badge').innerHTML = '';
+    }
+  </script>
+
+</body>
+</html>

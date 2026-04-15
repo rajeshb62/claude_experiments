@@ -1,0 +1,1 @@
+{"kind":"FETCH","data":{"headers":{"content-length":"20","content-type":"application/json","date":"Sat, 21 Mar 2026 14:49:39 GMT","server":"uvicorn"},"body":"eyJzdGF0dXMiOiJwZW5kaW5nIn0=","status":200,"url":"http://localhost:8000/status/6a80250f-d34f-40be-b701-125b6ae37667"},"revalidate":31536000,"tags":[]}

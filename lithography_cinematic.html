@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Lithography Mask — Cinematic Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#030609;--surface:#0a0f1a;--surface2:#101828;--border:#1a2840;
+  --accent:#4fd4f8;--uv:#8040f0;--uv2:#b060ff;--amber:#e89020;
+  --plasma:#14d4b0;--chrome:#141c2c;--text:#d0dcea;--dim:#4a6080;
+}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;overflow-x:hidden}
+#app{display:flex;flex-direction:column;align-items:center;min-height:100vh;padding:16px 16px 32px}
+#header{text-align:center;margin-bottom:16px}
+#header h1{font-size:clamp(1.2rem,2.5vw,1.7rem);font-weight:600;letter-spacing:-0.02em;background:linear-gradient(135deg,#4fd4f8,#b060ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+#header p{font-size:0.78rem;color:var(--dim);margin-top:4px}
+#canvas-wrap{position:relative;width:100%;max-width:920px}
+#main-canvas{display:block;width:100%;border-radius:12px;border:1px solid var(--border);box-shadow:0 0 60px rgba(80,40,200,0.15),0 0 0 1px rgba(79,212,248,0.08)}
+#scene-overlay{position:absolute;top:16px;left:20px;pointer-events:none}
+#scene-num{font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--accent);letter-spacing:0.1em;opacity:0.7}
+#scene-name{font-size:1.05rem;font-weight:600;color:#fff;margin-top:2px;text-shadow:0 0 20px rgba(79,212,248,0.5)}
+#scene-sub{font-size:0.75rem;color:var(--dim);margin-top:3px}
+#tooltip-div{position:fixed;background:rgba(10,15,28,0.95);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:0.78rem;color:var(--text);max-width:200px;line-height:1.5;pointer-events:none;z-index:100;display:none;backdrop-filter:blur(8px)}
+#controls-bar{width:100%;max-width:920px;margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.ctrl-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#scene-dots{display:flex;gap:6px;align-items:center}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--border);cursor:pointer;transition:all 0.2s}
+.sdot.active{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.sdot.done{background:rgba(79,212,248,0.4)}
+#timeline-wrap{flex:1;position:relative;height:20px;display:flex;align-items:center;cursor:pointer}
+#timeline-track{position:absolute;left:0;right:0;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden}
+#timeline-fill{height:100%;background:linear-gradient(90deg,var(--uv),var(--accent));width:0%;transition:width 0.05s linear;border-radius:2px}
+#timeline-thumb{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid #fff;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 10px var(--accent);left:0%;pointer-events:none;transition:left 0.05s linear}
+.ctrl-btns{display:flex;gap:6px;align-items:center}
+.cbtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 12px;font-size:0.8rem;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all 0.15s;font-weight:500}
+.cbtn:hover{border-color:var(--accent);color:var(--accent)}
+.cbtn.active{background:var(--accent);border-color:var(--accent);color:#000}
+#btn-play{background:var(--uv);border-color:var(--uv);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.9rem;padding:0;flex-shrink:0}
+#btn-play:hover{opacity:0.85;color:#fff}
+.toggle-row{display:flex;align-items:center;gap:8px;font-size:0.8rem;color:var(--dim)}
+.tgl{position:relative;width:38px;height:20px;cursor:pointer}
+.tgl input{display:none}
+.tgl-track{position:absolute;inset:0;background:var(--surface2);border:1px solid var(--border);border-radius:10px;transition:background 0.2s}
+.tgl input:checked+.tgl-track{background:var(--uv);border-color:var(--uv)}
+.tgl-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:left 0.2s;pointer-events:none}
+.tgl input:checked~.tgl-thumb{left:20px}
+#editor-panel{width:100%;max-width:920px;margin-top:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:none}
+#editor-panel.open{display:block}
+#editor-panel h3{font-size:0.8rem;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
+.editor-inner{display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap}
+#mask-grid-el{display:grid;grid-template-columns:repeat(10,28px);grid-template-rows:repeat(10,28px);gap:2px;cursor:crosshair}
+.mcell{width:28px;height:28px;border-radius:3px;transition:background 0.08s}
+.mcell.opaque{background:#1a2438}
+.mcell.clear{background:rgba(79,212,248,0.12);border:1px solid rgba(79,212,248,0.2)}
+.mcell:hover{outline:2px solid var(--accent);outline-offset:-1px}
+.editor-btns{display:flex;flex-direction:column;gap:7px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <h1>Lithography Mask Simulator</h1>
+    <p>Cinematic interactive walkthrough of semiconductor photolithography</p>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="main-canvas"></canvas>
+    <div id="scene-overlay">
+      <div id="scene-num">SCENE 01</div>
+      <div id="scene-name">The Cleanroom</div>
+      <div id="scene-sub">Spin-coating photoresist onto silicon</div>
+    </div>
+  </div>
+
+  <div id="tooltip-div"></div>
+
+  <div id="controls-bar">
+    <div class="ctrl-row">
+      <div id="scene-dots">
+        <div class="sdot active" onclick="jumpScene(0)" title="Cleanroom"></div>
+        <div class="sdot" onclick="jumpScene(1)" title="Mask"></div>
+        <div class="sdot" onclick="jumpScene(2)" title="UV Expose"></div>
+        <div class="sdot" onclick="jumpScene(3)" title="Develop"></div>
+        <div class="sdot" onclick="jumpScene(4)" title="Etch"></div>
+        <div class="sdot" onclick="jumpScene(5)" title="Reveal"></div>
+      </div>
+      <button class="cbtn" id="btn-play" onclick="togglePlay()">▶</button>
+      <div id="timeline-wrap">
+        <div id="timeline-track"><div id="timeline-fill"></div></div>
+        <div id="timeline-thumb"></div>
+      </div>
+    </div>
+    <div class="ctrl-row">
+      <div class="ctrl-btns">
+        <span style="font-size:0.75rem;color:var(--dim)">Speed:</span>
+        <button class="cbtn" onclick="setSpeed(0.5)">0.5×</button>
+        <button class="cbtn active" id="spd1" onclick="setSpeed(1)">1×</button>
+        <button class="cbtn" onclick="setSpeed(2)">2×</button>
+      </div>
+      <div class="toggle-row">
+        <label class="tgl"><input type="checkbox" id="neg-toggle" onchange="toggleResist()"/><div class="tgl-track"></div><div class="tgl-thumb"></div></label>
+        <span>Negative resist</span>
+      </div>
+      <button class="cbtn" onclick="toggleEditor()">✏ Mask Editor</button>
+      <button class="cbtn" onclick="resetAnim()">↺ Reset</button>
+    </div>
+  </div>
+
+  <div id="editor-panel">
+    <h3>Custom Mask · click or drag to paint</h3>
+    <div class="editor-inner">
+      <div id="mask-grid-el"></div>
+      <div class="editor-btns">
+        <button class="cbtn" onclick="presetDefault()">Load preset</button>
+        <button class="cbtn" onclick="clearMaskGrid()">Clear all</button>
+        <button class="cbtn" onclick="invertMaskGrid()">Invert</button>
+      </div>
+      <div id="editor-preview-wrap" style="font-size:0.75rem;color:var(--dim);max-width:200px;line-height:1.6">
+        <strong style="color:var(--text)">Dark cells</strong> = chrome (opaque)<br>
+        <strong style="color:var(--accent)">Blue cells</strong> = clear (UV passes through)<br><br>
+        Changes apply in real time to all scenes.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  CONSTANTS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const CW = 900, CH = 520;
+const WCX = 430, WCY = 275, WR = 165;   // wafer centre + radius
+const GCX = WCX, GCY = WCY;              // circuit grid centre
+const CELL = 21, GCOLS = 10, GROWS = 10; // grid cell size
+const GW = CELL * GCOLS, GH = CELL * GROWS;
+const GX0 = GCX - GW/2, GY0 = GCY - GH/2;
+
+const SCENE_DUR = 6;   // seconds each scene at 1×
+const SCENE_N   = 6;
+const TOTAL_DUR = SCENE_N * SCENE_DUR;
+
+const SCENE_META = [
+  { num:'01', name:'The Cleanroom',    sub:'Spin-coating photoresist onto silicon' },
+  { num:'02', name:'Mask Descends',    sub:'Aligning the lithography mask' },
+  { num:'03', name:'UV Exposure',      sub:'Light passes through the chrome mask' },
+  { num:'04', name:'Development',      sub:'Washing away exposed photoresist' },
+  { num:'05', name:'Plasma Etching',   sub:'Carving the silicon surface' },
+  { num:'06', name:'Strip & Reveal',   sub:'The finished circuit pattern' },
+];
+
+const DEFAULT_MASK = [
+  [1,1,1,0,0,0,0,1,1,1],
+  [1,0,1,0,1,1,0,1,0,1],
+  [1,0,0,0,0,1,0,0,0,1],
+  [0,0,1,1,0,0,1,1,0,0],
+  [0,1,0,0,0,0,0,0,1,0],
+  [0,1,0,0,0,0,0,0,1,0],
+  [0,0,1,1,0,0,1,1,0,0],
+  [1,0,0,0,0,1,0,0,0,1],
+  [1,0,1,0,1,1,0,1,0,1],
+  [1,1,1,0,0,0,0,1,1,1],
+];
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  STATE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const S = {
+  t: 0,            // 0..TOTAL_DUR (seconds)
+  playing: false,
+  speed: 1,
+  negative: false,
+  mask: DEFAULT_MASK.map(r=>[...r]),
+  particles: [],
+  lastTs: null,
+  mouse: { x:0, y:0, cx:0, cy:0 },
+  dragging: false,
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  CANVAS SETUP
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const canvas = document.getElementById('main-canvas');
+const ctx    = canvas.getContext('2d');
+canvas.width  = CW;
+canvas.height = CH;
+
+function scaleCanvas() {
+  const mw = Math.min(window.innerWidth - 40, 1100);
+  const sc = mw / CW;
+  canvas.style.width  = (CW * sc) + 'px';
+  canvas.style.height = (CH * sc) + 'px';
+}
+scaleCanvas();
+window.addEventListener('resize', scaleCanvas);
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  MATH UTILITIES
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const lerp   = (a,b,t) => a + (b-a)*t;
+const clamp  = (v,a,b) => Math.max(a, Math.min(b,v));
+const mapR   = (v,a,b,c,d) => lerp(c,d, clamp((v-a)/(b-a),0,1));
+const eio    = t => t<0.5 ? 2*t*t : -1+(4-2*t)*t;
+const eout   = t => 1-(1-t)*(1-t);
+const eout3  = t => 1-(1-t)*(1-t)*(1-t);
+const ein    = t => t*t;
+const spring = (t,overshoot=1.08) => {
+  if(t>=1) return 1;
+  return 1 - Math.cos(t*Math.PI*(2.5+overshoot*0.5)) * Math.exp(-t*5);
+};
+const segT   = (t,a,b) => clamp((t-a)/(b-a),0,1);  // t in [a,b] → [0,1]
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  PARTICLE SYSTEM
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function spawnParticle(o){ S.particles.push({life:1,...o}); }
+
+function updateParticles(dt){
+  for(let i=S.particles.length-1;i>=0;i--){
+    const p=S.particles[i];
+    p.x += p.vx*dt;
+    p.y += p.vy*dt;
+    p.life -= dt/p.maxLife;
+    if(p.vy!==undefined && p.gravity) p.vy += 40*dt;
+    if(p.life<=0) S.particles.splice(i,1);
+  }
+  if(S.particles.length>400) S.particles.splice(0, S.particles.length-400);
+}
+
+function drawParticles(){
+  S.particles.forEach(p=>{
+    const a = Math.max(0, p.life);
+    ctx.save();
+    ctx.globalAlpha = a * (p.alpha||1);
+    if(p.type==='photon'){
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r||2,0,Math.PI*2);
+      ctx.fillStyle = p.color||'#c080ff';
+      ctx.shadowColor = p.color||'#c080ff';
+      ctx.shadowBlur = 6;
+      ctx.fill();
+    } else if(p.type==='fragment'){
+      ctx.fillStyle = p.color||'#e89020';
+      ctx.shadowColor = p.color||'#e89020';
+      ctx.shadowBlur = 4;
+      ctx.fillRect(p.x-p.s/2, p.y-p.s/2, p.s, p.s);
+    } else if(p.type==='plasma'){
+      const g = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.r||4);
+      g.addColorStop(0,'rgba(20,212,176,0.9)');
+      g.addColorStop(1,'rgba(20,212,176,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r||4,0,Math.PI*2);
+      ctx.fill();
+    } else if(p.type==='droplet'){
+      ctx.fillStyle = p.color||'rgba(100,160,220,0.7)';
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r||3,0,Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  DRAW HELPERS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function drawBackground(){
+  // Deep cleanroom gradient
+  const bg = ctx.createRadialGradient(CW/2, CH/2, 0, CW/2, CH/2, CW*0.7);
+  bg.addColorStop(0,'#06090f');
+  bg.addColorStop(1,'#020406');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0,0,CW,CH);
+
+  // Subtle floor grid
+  ctx.strokeStyle='rgba(20,50,90,0.25)';
+  ctx.lineWidth=0.5;
+  for(let x=0;x<CW;x+=40){ ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke(); }
+  for(let y=0;y<CH;y+=40){ ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke(); }
+
+  // Corner vignette
+  const vig = ctx.createRadialGradient(CW/2,CH/2,CH*0.3,CW/2,CH/2,CW*0.7);
+  vig.addColorStop(0,'transparent');
+  vig.addColorStop(1,'rgba(1,2,5,0.6)');
+  ctx.fillStyle=vig;
+  ctx.fillRect(0,0,CW,CH);
+}
+
+function drawWafer(cx,cy,r,alpha=1,resistT=0,negativeResist=false,maskGrid=null,etchT=0,stripT=0){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+
+  // Silicon base
+  const wg = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, r*0.1, cx, cy, r);
+  wg.addColorStop(0,'#c8d2de');
+  wg.addColorStop(0.5,'#9aaabe');
+  wg.addColorStop(1,'#6a7a90');
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle=wg;
+  ctx.fill();
+
+  // Crystal structure lines
+  ctx.strokeStyle='rgba(180,200,220,0.12)';
+  ctx.lineWidth=0.8;
+  for(let i=1;i<8;i++){
+    ctx.beginPath();
+    ctx.arc(cx,cy,r*i/8,0,Math.PI*2);
+    ctx.stroke();
+  }
+
+  // Iridescent rainbow tinge
+  const ird = ctx.createLinearGradient(cx-r,cy-r,cx+r,cy+r);
+  ird.addColorStop(0,'rgba(80,120,200,0.08)');
+  ird.addColorStop(0.3,'rgba(200,80,120,0.06)');
+  ird.addColorStop(0.6,'rgba(80,200,120,0.06)');
+  ird.addColorStop(1,'rgba(200,180,80,0.06)');
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle=ird;
+  ctx.fill();
+
+  // Highlight arc
+  ctx.beginPath();
+  ctx.arc(cx-r*0.25, cy-r*0.25, r*0.55, -Math.PI*0.8, -Math.PI*0.2);
+  ctx.strokeStyle='rgba(255,255,255,0.25)';
+  ctx.lineWidth=2;
+  ctx.stroke();
+
+  // Wafer rim
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle='rgba(120,140,160,0.6)';
+  ctx.lineWidth=1.5;
+  ctx.stroke();
+
+  // Photoresist layer
+  if(resistT>0 && etchT===0 && stripT===0){
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.clip();
+
+    const stripEnd = negativeResist ? 0 : resistT;
+    const keepEnd  = negativeResist ? resistT : 0;
+
+    if(maskGrid && resistT>=1){
+      // Patterned resist after development
+      for(let row=0;row<GROWS;row++){
+        for(let col=0;col<GCOLS;col++){
+          const x=GX0+col*CELL, y=GY0+row*CELL;
+          const opaque=maskGrid[row][col]===1;
+          const lightHit=!opaque;
+          const hasResist = negativeResist ? lightHit : !lightHit;
+          if(hasResist){
+            ctx.fillStyle='rgba(220,130,10,0.85)';
+            ctx.fillRect(x,y,CELL,CELL);
+          }
+        }
+      }
+    } else {
+      // Uniform resist spread
+      const rg = ctx.createRadialGradient(cx,cy,0,cx,cy,r*resistT);
+      rg.addColorStop(0,'rgba(220,130,10,0.82)');
+      rg.addColorStop(0.8,'rgba(200,110,8,0.85)');
+      rg.addColorStop(1,'rgba(180,90,5,0.7)');
+      ctx.fillStyle=rg;
+      ctx.beginPath();
+      ctx.arc(cx,cy,r*Math.min(resistT,1),0,Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // Etched silicon result
+  if(etchT>0 && maskGrid){
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,0,Math.PI*2);
+    ctx.save();
+    ctx.clip();
+
+    for(let row=0;row<GROWS;row++){
+      for(let col=0;col<GCOLS;col++){
+        const x=GX0+col*CELL, y=GY0+row*CELL;
+        const opaque=maskGrid[row][col]===1;
+        const lightHit=!opaque;
+        const etched = negativeResist ? !lightHit : lightHit;
+        if(etched){
+          // Etched trench
+          ctx.fillStyle=`rgba(5,15,30,${Math.min(etchT,1)})`;
+          ctx.fillRect(x,y,CELL,CELL);
+          // Teal glow in trench
+          const eg=ctx.createRadialGradient(x+CELL/2,y+CELL/2,0,x+CELL/2,y+CELL/2,CELL*0.7);
+          eg.addColorStop(0,`rgba(20,180,200,${0.15*Math.min(etchT,1)})`);
+          eg.addColorStop(1,'transparent');
+          ctx.fillStyle=eg;
+          ctx.fillRect(x,y,CELL,CELL);
+        } else {
+          // Remaining silicon ridge
+          ctx.fillStyle=`rgba(25,55,100,${Math.min(etchT,1)*0.7})`;
+          ctx.fillRect(x,y,CELL,CELL);
+        }
+      }
+    }
+
+    // Strip resist on top (stripT 0→1)
+    if(stripT>0){
+      for(let row=0;row<GROWS;row++){
+        for(let col=0;col<GCOLS;col++){
+          const x=GX0+col*CELL, y=GY0+row*CELL;
+          const opaque=maskGrid[row][col]===1;
+          const lightHit=!opaque;
+          const hadResist = negativeResist ? lightHit : !lightHit;
+          if(hadResist){
+            ctx.fillStyle=`rgba(220,130,10,${Math.max(0,0.85-stripT*1.2)})`;
+            ctx.fillRect(x,y,CELL,CELL);
+          }
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+function drawMaskPlate(cx,cy,w,h,maskGrid,alpha=1,glassAlpha=0.5){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+
+  // Glass plate
+  const glass=ctx.createLinearGradient(cx-w/2,cy-h/2,cx+w/2,cy+h/2);
+  glass.addColorStop(0,`rgba(160,190,220,${glassAlpha*0.25})`);
+  glass.addColorStop(0.5,`rgba(140,170,200,${glassAlpha*0.15})`);
+  glass.addColorStop(1,`rgba(120,150,180,${glassAlpha*0.2})`);
+  ctx.fillStyle=glass;
+  ctx.beginPath();
+  ctx.roundRect(cx-w/2,cy-h/2,w,h,6);
+  ctx.fill();
+
+  // Chrome circuit grid
+  const mx=cx-GW/2, my=cy-GH/2;
+  for(let row=0;row<GROWS;row++){
+    for(let col=0;col<GCOLS;col++){
+      const x=mx+col*CELL, y=my+row*CELL;
+      if(maskGrid[row][col]===1){
+        // Opaque chrome
+        ctx.fillStyle='#131c2c';
+        ctx.fillRect(x+0.5,y+0.5,CELL-1,CELL-1);
+        // Chrome sheen
+        ctx.fillStyle='rgba(80,100,130,0.3)';
+        ctx.fillRect(x+0.5,y+0.5,CELL-1,2);
+        ctx.fillRect(x+0.5,y+0.5,2,CELL-1);
+      } else {
+        // Clear — faint glow
+        ctx.fillStyle='rgba(140,200,255,0.06)';
+        ctx.fillRect(x+0.5,y+0.5,CELL-1,CELL-1);
+        ctx.strokeStyle='rgba(140,200,255,0.12)';
+        ctx.lineWidth=0.5;
+        ctx.strokeRect(x+0.5,y+0.5,CELL-1,CELL-1);
+      }
+    }
+  }
+
+  // Outer frame
+  ctx.strokeStyle='rgba(80,100,140,0.7)';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.roundRect(cx-w/2,cy-h/2,w,h,6);
+  ctx.stroke();
+
+  // Glass highlight
+  ctx.fillStyle='rgba(255,255,255,0.06)';
+  ctx.beginPath();
+  ctx.roundRect(cx-w/2,cy-h/2,w,12,{upperLeft:6,upperRight:6,lowerLeft:0,lowerRight:0});
+  ctx.fill();
+
+  // Alignment marks (corners)
+  [[cx-w/2+14,cy-h/2+14],[cx+w/2-14,cy-h/2+14],[cx-w/2+14,cy+h/2-14],[cx+w/2-14,cy+h/2-14]].forEach(([ax,ay])=>{
+    ctx.strokeStyle='rgba(79,212,248,0.6)';
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(ax-6,ay); ctx.lineTo(ax+6,ay); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ax,ay-6); ctx.lineTo(ax,ay+6); ctx.stroke();
+  });
+
+  ctx.restore();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  CROSS-SECTION VIEW
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function drawCrossSection(x,y,w,h,mask,negative,uvT=0,etchDepth=0,resistLeft=true,slideIn=1){
+  const ox = x + w*(1-slideIn);
+  ctx.save();
+  ctx.globalAlpha = slideIn;
+
+  // Background
+  ctx.fillStyle='rgba(5,10,20,0.92)';
+  ctx.beginPath();
+  ctx.roundRect(ox,y,w,h,8);
+  ctx.fill();
+  ctx.strokeStyle='rgba(30,60,100,0.6)';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  // Title
+  ctx.fillStyle='rgba(79,212,248,0.7)';
+  ctx.font='500 9px Space Grotesk';
+  ctx.textAlign='center';
+  ctx.fillText('CROSS-SECTION', ox+w/2, y+13);
+
+  // Layer positions
+  const iy = y+22;
+  const ih = h-28;
+  const csCell = Math.floor(w/10);
+  const uvH = 20;
+  const resistH = 14;
+  const siliconH = ih - uvH - resistH - 4;
+
+  // UV rays through clear cells
+  if(uvT>0){
+    for(let c=0;c<10;c++){
+      const col = Math.min(c, mask[0].length-1);
+      const rowIdx = 4; // middle row for cross-section
+      const isOpaque = mask[rowIdx][col]===1;
+      if(!isOpaque){
+        const rx = ox + c*csCell + csCell*0.1;
+        const rw = csCell*0.8;
+        const rayH = uvH + resistH + 4;
+        const rayGrad = ctx.createLinearGradient(0,iy,0,iy+rayH*uvT);
+        rayGrad.addColorStop(0,'rgba(160,80,255,0.8)');
+        rayGrad.addColorStop(1,'rgba(140,60,240,0)');
+        ctx.fillStyle=rayGrad;
+        ctx.fillRect(rx, iy, rw, rayH*Math.min(uvT,1));
+      }
+    }
+  }
+
+  // Resist layer
+  for(let c=0;c<10;c++){
+    const col=Math.min(c,mask[0].length-1);
+    const rowIdx=4;
+    const isOpaque=mask[rowIdx][col]===1;
+    const lightHit=!isOpaque;
+    const keepResist=negative?lightHit:!lightHit;
+    const rx=ox+c*csCell;
+    const ry=iy+uvH+2;
+
+    if(resistLeft && keepResist){
+      ctx.fillStyle='rgba(220,130,10,0.85)';
+    } else if(!resistLeft && keepResist){
+      ctx.fillStyle=`rgba(220,130,10,${Math.max(0,0.85-etchDepth)})`;
+    } else {
+      ctx.fillStyle='transparent';
+    }
+    if(resistLeft || keepResist) ctx.fillRect(rx+1,ry,csCell-2,resistH);
+  }
+
+  // Label resist
+  ctx.fillStyle='rgba(220,130,10,0.7)';
+  ctx.font='500 8px JetBrains Mono';
+  ctx.textAlign='right';
+  ctx.fillText('RESIST',ox+w-4,iy+uvH+2+resistH/2+3);
+
+  // Silicon layer
+  for(let c=0;c<10;c++){
+    const col=Math.min(c,mask[0].length-1);
+    const rowIdx=4;
+    const isOpaque=mask[rowIdx][col]===1;
+    const lightHit=!isOpaque;
+    const etched=negative?!lightHit:lightHit;
+    const rx=ox+c*csCell;
+    const ry=iy+uvH+2+resistH+2;
+
+    if(etched && etchDepth>0){
+      const trenchH = siliconH * Math.min(etchDepth,1) * 0.6;
+      ctx.fillStyle='#0a1525';
+      ctx.fillRect(rx+1,ry,csCell-2,trenchH);
+      // Teal glow
+      ctx.fillStyle=`rgba(20,180,200,${0.2*Math.min(etchDepth,1)})`;
+      ctx.fillRect(rx+1,ry,csCell-2,trenchH);
+      ctx.fillStyle='#1a3560';
+      ctx.fillRect(rx+1,ry+trenchH,csCell-2,siliconH-trenchH);
+    } else {
+      ctx.fillStyle='#1a3560';
+      ctx.fillRect(rx+1,ry,csCell-2,siliconH);
+    }
+  }
+
+  // Label silicon
+  ctx.fillStyle='rgba(79,212,248,0.7)';
+  ctx.font='500 8px JetBrains Mono';
+  ctx.textAlign='right';
+  ctx.fillText('Si',ox+w-4,iy+uvH+resistH+siliconH/2+6);
+
+  // Depth gauge (scenes 4-5)
+  if(etchDepth>0){
+    const gy=iy+uvH+2+resistH+2;
+    const depth=siliconH*0.6*Math.min(etchDepth,1);
+    ctx.strokeStyle='rgba(20,212,176,0.6)';
+    ctx.setLineDash([2,2]);
+    ctx.lineWidth=1;
+    ctx.beginPath();
+    ctx.moveTo(ox+w-12,gy);
+    ctx.lineTo(ox+w-12,gy+depth);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrow heads
+    ctx.fillStyle='rgba(20,212,176,0.7)';
+    ctx.font='8px JetBrains Mono';
+    ctx.textAlign='center';
+    ctx.fillText(`${Math.round(depth*0.3)}nm`,ox+w-12,gy+depth+10);
+  }
+
+  ctx.restore();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  SCENE RENDERERS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Scene 0: Cleanroom intro + spin coat
+function scene0(t){
+  const mask=S.mask, neg=S.negative;
+
+  // Wafer appears (spin/scale in)
+  const waferIn  = eout3(segT(t,0,0.35));
+  const waferRot = lerp(-Math.PI*2,0, eio(segT(t,0,0.45)));
+  const waferAlpha = waferIn;
+
+  // Arm swings in
+  const armIn = segT(t,0.3,0.65);
+  const armX  = lerp(CW+80, WCX+20, eout3(armIn));
+  const armY  = lerp(80, WCY-40, eout3(armIn));
+
+  // Resist spreads
+  const resistT = segT(t,0.5,0.92);
+
+  // Glow pulse at end
+  const pulse = Math.max(0, segT(t,0.92,1.0));
+  if(pulse>0){
+    const gAlpha = Math.sin(pulse*Math.PI)*0.4;
+    const gRad = ctx.createRadialGradient(WCX,WCY,0,WCX,WCY,WR*1.3);
+    gRad.addColorStop(0,`rgba(220,130,10,${gAlpha})`);
+    gRad.addColorStop(1,'transparent');
+    ctx.fillStyle=gRad;
+    ctx.fillRect(0,0,CW,CH);
+  }
+
+  // Wafer (with rotation transform)
+  ctx.save();
+  ctx.translate(WCX,WCY);
+  ctx.rotate(waferRot);
+  ctx.translate(-WCX,-WCY);
+  drawWafer(WCX,WCY,WR*waferIn,waferAlpha, resistT);
+  ctx.restore();
+
+  // Robotic arm
+  if(armIn>0 && resistT<0.9){
+    ctx.save();
+    const baseX=CW-30, baseY=50;
+    ctx.strokeStyle='rgba(100,130,160,0.7)';
+    ctx.lineWidth=5;
+    ctx.lineCap='round';
+    ctx.shadowColor='rgba(79,212,248,0.3)';
+    ctx.shadowBlur=8;
+    ctx.beginPath(); ctx.moveTo(baseX,baseY); ctx.lineTo(armX+50,armY-20); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(armX+50,armY-20); ctx.lineTo(armX,armY); ctx.stroke();
+    // Nozzle
+    const ng=ctx.createRadialGradient(armX,armY,0,armX,armY,10);
+    ng.addColorStop(0,'rgba(100,140,180,0.9)');
+    ng.addColorStop(1,'rgba(60,90,120,0.5)');
+    ctx.fillStyle=ng;
+    ctx.beginPath(); ctx.arc(armX,armY,8,0,Math.PI*2); ctx.fill();
+    // Drip
+    if(resistT>0 && resistT<0.8){
+      ctx.fillStyle='rgba(220,140,10,0.7)';
+      const dripY=armY+12+Math.sin(t*20)*3;
+      ctx.beginPath(); ctx.arc(armX,dripY,4*Math.min(resistT*3,1),0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Resist ripple rings
+  if(resistT>0 && resistT<1){
+    for(let i=0;i<3;i++){
+      const rr=resistT-i*0.15;
+      if(rr>0){
+        const rRad=WR*Math.min(rr,1);
+        const rAlpha=Math.max(0,(1-rr)*0.4);
+        ctx.strokeStyle=`rgba(220,150,10,${rAlpha})`;
+        ctx.lineWidth=2;
+        ctx.beginPath(); ctx.arc(WCX,WCY,rRad,0,Math.PI*2); ctx.stroke();
+      }
+    }
+  }
+
+  // Labels
+  if(waferIn>0.5){
+    labelTag(WCX, WCY+WR+18, 'Silicon Wafer (300mm)', 'rgba(79,212,248,0.7)');
+  }
+  if(resistT>0.2 && resistT<0.95){
+    labelTag(WCX-90, WCY-30, 'Photoresist spinning out…', 'rgba(220,150,10,0.8)');
+  }
+}
+
+// Scene 1: Mask descends
+function scene1(t){
+  // Wafer + full resist from scene 0
+  drawWafer(WCX,WCY,WR,1, 1);
+
+  const maskH=280, maskW=380;
+  // Mask descends from above
+  const descentT = eout3(segT(t,0.05,0.55));
+  const maskY = lerp(-maskH/2, WCY-WR*0.05, descentT);
+
+  // Alignment lock flash at t~0.57
+  const lockT=segT(t,0.55,0.65);
+  if(lockT>0 && lockT<1){
+    const flashA=Math.sin(lockT*Math.PI)*0.5;
+    const flashG=ctx.createRadialGradient(WCX,WCY,0,WCX,WCY,WR*1.2);
+    flashG.addColorStop(0,`rgba(79,212,248,${flashA})`);
+    flashG.addColorStop(1,'transparent');
+    ctx.fillStyle=flashG;
+    ctx.fillRect(0,0,CW,CH);
+  }
+
+  // Chrome brightens after lock
+  const chromeSharp=segT(t,0.6,0.9);
+  drawMaskPlate(WCX,maskY,maskW,maskH,S.mask,1,0.5+chromeSharp*0.3);
+
+  // Drop shadow
+  if(maskY>0){
+    ctx.save();
+    ctx.globalAlpha=0.25*descentT;
+    const sg=ctx.createRadialGradient(WCX,WCY,WR*0.3,WCX,WCY,WR);
+    sg.addColorStop(0,'rgba(0,0,0,0.5)');
+    sg.addColorStop(1,'transparent');
+    ctx.fillStyle=sg;
+    ctx.beginPath(); ctx.arc(WCX,WCY,WR,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Descending guide lines
+  if(descentT>0 && descentT<1){
+    ctx.save();
+    ctx.strokeStyle='rgba(79,212,248,0.2)';
+    ctx.setLineDash([4,8]);
+    ctx.lineWidth=1;
+    const lx=[WCX-maskW/2+8, WCX+maskW/2-8];
+    lx.forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,-10); ctx.lineTo(x,maskY+maskH/2); ctx.stroke(); });
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Labels
+  if(descentT>0.3){
+    labelTag(WCX+maskW/2+14, maskY, 'Chrome photomask', 'rgba(79,212,248,0.8)');
+  }
+  if(lockT>=1){
+    labelTag(WCX, WCY+WR+18, '✓ Mask aligned', 'rgba(80,240,120,0.9)');
+  }
+}
+
+// Scene 2: UV Exposure
+function scene2(t){
+  // Wafer below
+  drawWafer(WCX,WCY,WR,1,1);
+
+  // Mask locked in position
+  const maskY=WCY-WR*0.05;
+  const maskH=280, maskW=380;
+  drawMaskPlate(WCX,maskY,maskW,maskH,S.mask,1,0.7);
+
+  // UV source powers up
+  const uvPower = eio(segT(t,0,0.15));
+  const uvSourceY = 20;
+
+  // UV source glow at top
+  const uvG=ctx.createRadialGradient(WCX,uvSourceY,0,WCX,uvSourceY,200);
+  uvG.addColorStop(0,`rgba(160,80,255,${0.8*uvPower})`);
+  uvG.addColorStop(0.4,`rgba(100,40,200,${0.4*uvPower})`);
+  uvG.addColorStop(1,'transparent');
+  ctx.fillStyle=uvG;
+  ctx.fillRect(0,0,CW,CH);
+
+  // UV source label
+  if(uvPower>0.3){
+    ctx.save();
+    ctx.fillStyle=`rgba(180,120,255,${uvPower*0.9})`;
+    ctx.font='600 11px Space Grotesk';
+    ctx.textAlign='center';
+    ctx.shadowColor='rgba(160,80,255,0.8)';
+    ctx.shadowBlur=15;
+    ctx.fillText('UV LIGHT SOURCE (248nm EUV)', WCX, uvSourceY+16);
+    ctx.restore();
+  }
+
+  // Rays fire at t>0.12
+  const rayT=segT(t,0.12,0.7);
+  const rayBottom=maskY-maskH/2+2;
+
+  if(rayT>0){
+    for(let row=0;row<GROWS;row++){
+      for(let col=0;col<GCOLS;col++){
+        if(S.mask[row][col]===0){ // clear region
+          const rx=GX0+col*CELL+CELL/2;
+          const ry=GY0+row*CELL+CELL/2;
+          // Ray from source through mask to wafer
+          const rayLen=(ry - (maskY-maskH/2)) + 30;
+          const rg=ctx.createLinearGradient(rx,maskY-maskH/2-20,rx,ry+30);
+          rg.addColorStop(0,`rgba(170,90,255,${0.6*rayT})`);
+          rg.addColorStop(0.6,`rgba(140,60,240,${0.3*rayT})`);
+          rg.addColorStop(1,`rgba(130,50,220,0)`);
+          ctx.strokeStyle=rg;
+          ctx.lineWidth=CELL*0.7;
+          ctx.save();
+          ctx.globalAlpha=0.6;
+          ctx.beginPath();
+          ctx.moveTo(rx, maskY-maskH/2-20);
+          ctx.lineTo(rx, ry+20);
+          ctx.stroke();
+          ctx.restore();
+
+          // Impact glow on resist
+          const impactA=Math.min(rayT*2,1)*0.5;
+          const ig=ctx.createRadialGradient(rx,ry+8,0,rx,ry+8,CELL*0.8);
+          ig.addColorStop(0,`rgba(200,120,255,${impactA})`);
+          ig.addColorStop(1,'transparent');
+          ctx.fillStyle=ig;
+          ctx.fillRect(GX0+col*CELL,GY0+row*CELL,CELL,CELL);
+        }
+      }
+    }
+
+    // Spawn photon particles
+    if(Math.random()<0.3){
+      const col=Math.floor(Math.random()*10);
+      const row=Math.floor(Math.random()*10);
+      if(S.mask[row][col]===0){
+        spawnParticle({
+          type:'photon',x:GX0+col*CELL+CELL/2, y:maskY-maskH/2,
+          vx:(Math.random()-0.5)*20, vy:60+Math.random()*40,
+          maxLife:0.8, r:2, color:'#c080ff', alpha:0.8,
+        });
+      }
+    }
+  }
+
+  // Cross-section slides in
+  const xsT=eout3(segT(t,0.45,0.75));
+  if(xsT>0){
+    drawCrossSection(640,80,240,280,S.mask,S.negative,rayT,0,true,xsT);
+  }
+
+  // Labels
+  if(rayT>0.3){
+    labelTag(GX0-14, WCY-60, '⚡ UV hitting resist', 'rgba(200,120,255,0.8)');
+  }
+  labelTag(WCX+190, WCY+WR*0.2, '⬛ Chrome blocks UV', 'rgba(100,120,160,0.7)');
+}
+
+// Scene 3: Development wash
+function scene3(t){
+  const waveX = lerp(-WR*1.5, WR*1.5+WCX*2, eio(segT(t,0.1,0.75)));
+  const devT  = segT(t,0.1,0.8);
+
+  // Wafer with UV marks (but we're now washing)
+  drawWafer(WCX,WCY,WR,1, devT>=1?1:0); // resist still on
+
+  // Pre-development: show marked wafer
+  if(devT<1){
+    // Show UV impact zones (residual from scene 2)
+    ctx.save();
+    ctx.beginPath(); ctx.arc(WCX,WCY,WR,0,Math.PI*2); ctx.clip();
+    for(let row=0;row<GROWS;row++){
+      for(let col=0;col<GCOLS;col++){
+        if(S.mask[row][col]===0){
+          const x=GX0+col*CELL, y=GY0+row*CELL;
+          const ea=Math.max(0,0.4-devT*0.5);
+          ctx.fillStyle=`rgba(160,80,240,${ea})`;
+          ctx.fillRect(x,y,CELL,CELL);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // Developer fluid wave
+  if(devT>0){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(WCX,WCY,WR,0,Math.PI*2); ctx.clip();
+
+    // Wave body
+    ctx.fillStyle='rgba(20,80,180,0.18)';
+    ctx.fillRect(WCX-WR, WCY-WR, waveX-(WCX-WR), WR*2);
+
+    // Wave front
+    const wfg=ctx.createLinearGradient(waveX-20,0,waveX+10,0);
+    wfg.addColorStop(0,'rgba(40,120,220,0.5)');
+    wfg.addColorStop(0.5,'rgba(80,160,255,0.7)');
+    wfg.addColorStop(1,'rgba(40,120,220,0)');
+    ctx.fillStyle=wfg;
+    ctx.fillRect(waveX-20,WCY-WR,40,WR*2);
+
+    // Sine wave edge
+    ctx.beginPath();
+    ctx.moveTo(waveX, WCY-WR);
+    for(let yy=WCY-WR;yy<=WCY+WR;yy+=2){
+      ctx.lineTo(waveX+Math.sin(yy*0.08+t*8)*5, yy);
+    }
+    ctx.strokeStyle='rgba(100,180,255,0.6)';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    ctx.restore();
+
+    // Dissolving fragments in wave's wake
+    const dissolveX=WCX-WR;
+    for(let row=0;row<GROWS;row++){
+      for(let col=0;col<GCOLS;col++){
+        const x=GX0+col*CELL, y=GY0+row*CELL;
+        const cx2=x+CELL/2;
+        const opaque=S.mask[row][col]===1;
+        const lightHit=!opaque;
+        const willDissolve=S.negative?!lightHit:lightHit;
+        if(willDissolve && cx2<waveX-10){
+          // This region has been washed — spawn fragment particles occasionally
+          if(Math.random()<0.01){
+            spawnParticle({
+              type:'fragment', x:x+Math.random()*CELL, y:y+Math.random()*CELL,
+              vx:(Math.random()-0.5)*30, vy:-20-Math.random()*40,
+              maxLife:1.2, s:3+Math.random()*4,
+              color:'rgba(200,120,8,0.8)',
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // After wave: show patterned resist
+  if(devT>0.5){
+    const showT=mapR(devT,0.5,0.9,0,1);
+    ctx.save();
+    ctx.globalAlpha=showT;
+    ctx.beginPath(); ctx.arc(WCX,WCY,WR,0,Math.PI*2); ctx.clip();
+    for(let row=0;row<GROWS;row++){
+      for(let col=0;col<GCOLS;col++){
+        const x=GX0+col*CELL, y=GY0+row*CELL;
+        const opaque=S.mask[row][col]===1;
+        const lightHit=!opaque;
+        const keepResist=S.negative?lightHit:!lightHit;
+        if(keepResist && GX0+col*CELL+CELL/2 < waveX || devT>0.9){
+          if(keepResist){
+            ctx.fillStyle='rgba(210,120,8,0.88)';
+            ctx.fillRect(x,y,CELL,CELL);
+          }
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // Cross-section
+  const xsT=eout3(segT(t,0.3,0.6));
+  if(xsT>0){
+    drawCrossSection(640,80,240,280,S.mask,S.negative,1,0,devT>0.7,xsT);
+  }
+
+  // Developer bubbles
+  if(devT>0.1 && devT<0.85){
+    if(Math.random()<0.15){
+      spawnParticle({
+        type:'droplet',x:waveX-Math.random()*60,y:WCY-WR+Math.random()*WR*2,
+        vx:(Math.random()-0.5)*20, vy:-15-Math.random()*20,
+        maxLife:0.6, r:2+Math.random()*3,
+        color:'rgba(80,140,220,0.6)',
+      });
+    }
+  }
+
+  labelTag(WCX-WR-10, WCY+30, '← Developer washing →', 'rgba(80,140,255,0.7)');
+  if(devT>0.7) labelTag(WCX, WCY+WR+18, 'Resist pattern developed', 'rgba(210,120,8,0.8)');
+}
+
+// Scene 4: Plasma etching
+function scene4(t){
+  const etchT=eio(segT(t,0.15,0.85));
+
+  // Wafer with patterned resist
+  drawWafer(WCX,WCY,WR,1,1,S.negative,S.mask,etchT,0);
+
+  // Plasma source
+  const plasmaPow=eout(segT(t,0,0.2));
+  const plasmaG=ctx.createRadialGradient(WCX,10,0,WCX,10,300);
+  plasmaG.addColorStop(0,`rgba(20,200,170,${0.5*plasmaPow})`);
+  plasmaG.addColorStop(0.5,`rgba(10,160,140,${0.2*plasmaPow})`);
+  plasmaG.addColorStop(1,'transparent');
+  ctx.fillStyle=plasmaG;
+  ctx.fillRect(0,0,CW,80);
+
+  if(plasmaPow>0.3){
+    ctx.save();
+    ctx.fillStyle=`rgba(20,212,176,${plasmaPow*0.8})`;
+    ctx.font='600 11px Space Grotesk';
+    ctx.textAlign='center';
+    ctx.shadowColor='rgba(20,212,176,0.9)';
+    ctx.shadowBlur=14;
+    ctx.fillText('PLASMA ETCH CHAMBER', WCX, 18);
+    ctx.restore();
+  }
+
+  // Plasma rain on exposed areas
+  if(etchT>0){
+    for(let row=0;row<GROWS;row++){
+      for(let col=0;col<GCOLS;col++){
+        const opaque=S.mask[row][col]===1;
+        const lightHit=!opaque;
+        const etched=S.negative?!lightHit:lightHit;
+        if(etched && Math.random()<0.012){
+          spawnParticle({
+            type:'plasma',
+            x:GX0+col*CELL+Math.random()*CELL,
+            y:0,
+            vx:(Math.random()-0.5)*8,
+            vy:80+Math.random()*60,
+            maxLife:0.9+Math.random()*0.4,
+            r:3+Math.random()*3,
+            gravity:true,
+          });
+        }
+      }
+    }
+  }
+
+  // Impact flashes
+  if(etchT>0 && etchT<0.9){
+    ctx.save();
+    ctx.beginPath(); ctx.arc(WCX,WCY,WR,0,Math.PI*2); ctx.clip();
+    for(let row=0;row<GROWS;row++){
+      for(let col=0;col<GCOLS;col++){
+        const opaque=S.mask[row][col]===1;
+        const lightHit=!opaque;
+        const etched=S.negative?!lightHit:lightHit;
+        if(etched && Math.random()<0.03){
+          const fx=GX0+col*CELL+Math.random()*CELL;
+          const fy=GY0+row*CELL+Math.random()*CELL;
+          const fg=ctx.createRadialGradient(fx,fy,0,fx,fy,5);
+          fg.addColorStop(0,'rgba(20,240,200,0.7)');
+          fg.addColorStop(1,'transparent');
+          ctx.fillStyle=fg;
+          ctx.beginPath(); ctx.arc(fx,fy,5,0,Math.PI*2); ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // Cross-section with depth gauge
+  const xsSlide=eout3(segT(t,0.1,0.4));
+  drawCrossSection(630,60,250,310,S.mask,S.negative,1,etchT,true,xsSlide);
+
+  labelTag(WCX-WR-10, WCY-30, '↓ Plasma ions', 'rgba(20,212,176,0.8)');
+  if(etchT>0.5) labelTag(WCX, WCY+WR+18, 'Silicon etching…', 'rgba(20,212,176,0.8)');
+}
+
+// Scene 5: Strip & reveal + zoom
+function scene5(t){
+  const stripT = eio(segT(t,0.05,0.45));
+  const zoomInT= eio(segT(t,0.35,0.65));
+  const zoomOutT=eio(segT(t,0.72,1.0));
+
+  // Camera zoom
+  const zoomLevel = zoomOutT>0
+    ? lerp(lerp(1, 2.4, Math.min(zoomInT,1)), 0.4, zoomOutT)
+    : lerp(1, 2.4, zoomInT);
+
+  const camX = lerp(0, WCX*(1-1/zoomLevel), Math.min(zoomInT,1));
+
+  ctx.save();
+  ctx.translate(camX, 0);
+  ctx.scale(zoomLevel, zoomLevel);
+  ctx.translate(-WCX*(1-1/zoomLevel)/zoomLevel*0, 0);
+
+  if(zoomOutT>0.3){
+    // Full wafer tiled with dies
+    drawFullWaferDies(WCX, WCY, WR, S.mask, S.negative, Math.min(zoomOutT-0.3, 1)*1.5);
+  } else {
+    // Single circuit reveal
+    drawWafer(WCX,WCY,WR,1,stripT<1?1:0,S.negative,S.mask,1,stripT);
+
+    // Gleam effect after strip
+    if(stripT>0.7){
+      const gleamA=(stripT-0.7)/0.3;
+      ctx.save();
+      ctx.beginPath(); ctx.arc(WCX,WCY,WR,0,Math.PI*2); ctx.clip();
+      for(let row=0;row<GROWS;row++){
+        for(let col=0;col<GCOLS;col++){
+          const opaque=S.mask[row][col]===1;
+          const lightHit=!opaque;
+          const etched=S.negative?!lightHit:lightHit;
+          if(!etched){
+            const x=GX0+col*CELL, y=GY0+row*CELL;
+            const sg=ctx.createLinearGradient(x,y,x,y+CELL);
+            sg.addColorStop(0,`rgba(79,212,248,${0.3*gleamA})`);
+            sg.addColorStop(1,`rgba(20,180,200,${0.1*gleamA})`);
+            ctx.fillStyle=sg;
+            ctx.fillRect(x,y,CELL,CELL);
+          }
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();
+
+  // Glow halo on final reveal
+  if(stripT>0.8 && zoomOutT===0){
+    const hg=ctx.createRadialGradient(WCX,WCY,WR*0.5,WCX,WCY,WR*1.4);
+    hg.addColorStop(0,'transparent');
+    hg.addColorStop(0.6,`rgba(79,212,248,${(stripT-0.8)*0.15})`);
+    hg.addColorStop(1,'transparent');
+    ctx.fillStyle=hg;
+    ctx.fillRect(0,0,CW,CH);
+  }
+
+  // Label
+  if(zoomOutT<0.5){
+    if(stripT<0.9) labelTag(WCX, WCY+WR+20, 'Stripping photoresist…', 'rgba(220,140,10,0.8)');
+    else labelTag(WCX, WCY+WR+20, '✓ Circuit pattern complete', 'rgba(79,212,248,0.9)');
+  } else {
+    ctx.save();
+    ctx.fillStyle='rgba(79,212,248,0.8)';
+    ctx.font='600 13px Space Grotesk';
+    ctx.textAlign='center';
+    ctx.shadowColor='rgba(79,212,248,0.5)';
+    ctx.shadowBlur=12;
+    ctx.fillText('One die on a full 300mm wafer containing hundreds of identical dies', CW/2, CH-16);
+    ctx.restore();
+  }
+}
+
+function drawFullWaferDies(cx,cy,r,mask,negative,alpha){
+  ctx.save();
+  ctx.globalAlpha=Math.min(alpha,1);
+  // Full wafer base
+  const wg=ctx.createRadialGradient(cx,cy,r*0.1,cx,cy,r);
+  wg.addColorStop(0,'#a0aab8');
+  wg.addColorStop(1,'#606878');
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.fillStyle=wg; ctx.fill();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+
+  // Tile dies
+  const dieSize=28;
+  const cols=Math.ceil(r*2/dieSize), rows=Math.ceil(r*2/dieSize);
+  const sx=cx-cols/2*dieSize, sy=cy-rows/2*dieSize;
+  for(let dr=0;dr<rows;dr++){
+    for(let dc=0;dc<cols;dc++){
+      const dx=sx+dc*dieSize, dy=sy+dr*dieSize;
+      const dcx=dx+dieSize/2-cx, dcy=dy+dieSize/2-cy;
+      if(dcx*dcx+dcy*dcy<r*r*0.88){
+        // Draw mini circuit
+        const cs=dieSize/GCOLS;
+        for(let mr=0;mr<GROWS;mr++){
+          for(let mc=0;mc<GCOLS;mc++){
+            const opaque=mask[mr][mc]===1;
+            const lightHit=!opaque;
+            const etched=negative?!lightHit:lightHit;
+            const px=dx+mc*cs, py=dy+mr*cs;
+            ctx.fillStyle=etched?'#080f1c':'#1a3a60';
+            ctx.fillRect(px,py,cs,cs);
+          }
+        }
+        // Die border
+        ctx.strokeStyle='rgba(60,100,140,0.5)';
+        ctx.lineWidth=0.5;
+        ctx.strokeRect(dx,dy,dieSize,dieSize);
+      }
+    }
+  }
+  ctx.restore();
+  // Wafer rim
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle='rgba(120,140,160,0.7)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.restore();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  LABEL HELPER
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function labelTag(x,y,text,color){
+  ctx.save();
+  ctx.font='500 10px Space Grotesk';
+  ctx.textAlign='center';
+  ctx.fillStyle=color||'rgba(79,212,248,0.8)';
+  ctx.shadowColor=color||'rgba(79,212,248,0.5)';
+  ctx.shadowBlur=8;
+  ctx.fillText(text,x,y);
+  ctx.restore();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  TOOLTIP SYSTEM
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const TOOLTIP_ZONES = [
+  // Always visible
+  { x:WCX-WR, y:WCY-WR, w:WR*2, h:WR*2, label:'Silicon Wafer', text:'A 300mm silicon disc — the substrate on which billions of transistors will be built.' },
+  { x:GX0, y:GY0, w:GW, h:GH, label:'Circuit grid', text:'The pattern area: chrome blocks UV, clear regions let UV through to expose the resist below.' },
+];
+
+const tipDiv=document.getElementById('tooltip-div');
+canvas.addEventListener('mousemove', e=>{
+  const rect=canvas.getBoundingClientRect();
+  const scaleX=CW/rect.width;
+  const cx=(e.clientX-rect.left)*scaleX;
+  const cy=(e.clientY-rect.top)*(CH/rect.height);
+  S.mouse={x:e.clientX, y:e.clientY, cx, cy};
+
+  // Scene-specific tips
+  const sceneIdx=Math.min(SCENE_N-1,Math.floor(S.t/SCENE_DUR));
+  const sceneTips=[
+    [{x:WCX-WR,y:WCY-WR,w:WR*2,h:WR*2,text:'Silicon Wafer — a polished silicon disc serving as the base for chip fabrication.'}],
+    [{x:WCX-190,y:80,w:380,h:180,text:'Lithography Mask — a quartz plate with chrome circuit features. Chrome = opaque; clear = UV passes through.'}],
+    [{x:WCX-200,y:0,w:400,h:50,text:'UV Light Source — emits deep UV (248nm) or extreme UV (13.5nm) to expose the photoresist.'},
+     {x:GX0,y:GY0,w:GW,h:GH,text:'Exposure zone — UV passes through clear mask regions and chemically alters the photoresist below.'}],
+    [{x:WCX-WR,y:WCY-WR,w:WR*2,h:WR*2,text:'Developer fluid — a chemical solution that selectively dissolves either exposed (positive) or unexposed (negative) resist.'}],
+    [{x:WCX-WR,y:WCY-WR,w:WR*2,h:WR*2,text:'Plasma etching — ionized gas (e.g. CF₄, HBr) removes silicon from unprotected areas with nanometre precision.'}],
+    [{x:GX0,y:GY0,w:GW,h:GH,text:'Final circuit — the mask pattern is now permanently etched into silicon. This process repeats 30–100× to build a full chip.'}],
+  ];
+
+  let found=null;
+  (sceneTips[sceneIdx]||[]).forEach(z=>{
+    if(cx>z.x && cx<z.x+z.w && cy>z.y && cy<z.y+z.h) found=z;
+  });
+  if(found){
+    tipDiv.style.display='block';
+    tipDiv.style.left=(e.clientX+14)+'px';
+    tipDiv.style.top=(e.clientY-30)+'px';
+    tipDiv.textContent=found.text;
+  } else {
+    tipDiv.style.display='none';
+  }
+});
+canvas.addEventListener('mouseleave',()=>{ tipDiv.style.display='none'; });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  MAIN RENDER + LOOP
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function render(){
+  ctx.clearRect(0,0,CW,CH);
+  drawBackground();
+
+  const sceneIdx=Math.min(SCENE_N-1, Math.floor(S.t/SCENE_DUR));
+  const sceneT=clamp((S.t - sceneIdx*SCENE_DUR)/SCENE_DUR, 0, 1);
+
+  switch(sceneIdx){
+    case 0: scene0(sceneT); break;
+    case 1: scene1(sceneT); break;
+    case 2: scene2(sceneT); break;
+    case 3: scene3(sceneT); break;
+    case 4: scene4(sceneT); break;
+    case 5: scene5(sceneT); break;
+  }
+
+  drawParticles();
+  updateUI(sceneIdx, sceneT);
+}
+
+function loop(ts){
+  const dt=S.lastTs?Math.min((ts-S.lastTs)/1000,0.05):0;
+  S.lastTs=ts;
+  if(S.playing){
+    S.t=Math.min(TOTAL_DUR, S.t+dt*S.speed);
+    if(S.t>=TOTAL_DUR){ S.playing=false; document.getElementById('btn-play').textContent='▶'; }
+  }
+  updateParticles(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+function updateUI(sceneIdx, sceneT){
+  // Scene overlay text
+  const m=SCENE_META[sceneIdx];
+  document.getElementById('scene-num').textContent='SCENE '+m.num;
+  document.getElementById('scene-name').textContent=m.name;
+  document.getElementById('scene-sub').textContent=m.sub;
+
+  // Timeline
+  const pct=(S.t/TOTAL_DUR)*100;
+  document.getElementById('timeline-fill').style.width=pct+'%';
+  document.getElementById('timeline-thumb').style.left=pct+'%';
+
+  // Scene dots
+  document.querySelectorAll('.sdot').forEach((d,i)=>{
+    d.classList.toggle('active', i===sceneIdx);
+    d.classList.toggle('done', i<sceneIdx);
+  });
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  CONTROLS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function togglePlay(){
+  S.playing=!S.playing;
+  if(S.t>=TOTAL_DUR){ S.t=0; S.playing=true; }
+  document.getElementById('btn-play').textContent=S.playing?'⏸':'▶';
+}
+function setSpeed(v){
+  S.speed=v;
+  document.querySelectorAll('.ctrl-btns .cbtn').forEach(b=>{
+    b.classList.toggle('active', b.textContent===v+'×');
+  });
+}
+function toggleResist(){
+  S.negative=document.getElementById('neg-toggle').checked;
+}
+function jumpScene(i){
+  S.t=i*SCENE_DUR+0.01;
+  S.particles=[];
+  render();
+}
+function resetAnim(){
+  S.t=0; S.playing=false; S.particles=[];
+  document.getElementById('btn-play').textContent='▶';
+}
+function toggleEditor(){
+  const p=document.getElementById('editor-panel');
+  p.classList.toggle('open');
+}
+
+// Timeline drag
+const tlWrap=document.getElementById('timeline-wrap');
+let tlDragging=false;
+function tlSeek(e){
+  const rect=tlWrap.getBoundingClientRect();
+  const pct=clamp((e.clientX-rect.left)/rect.width,0,1);
+  S.t=pct*TOTAL_DUR;
+  S.particles=[];
+}
+tlWrap.addEventListener('mousedown', e=>{ tlDragging=true; tlSeek(e); });
+window.addEventListener('mousemove', e=>{ if(tlDragging) tlSeek(e); });
+window.addEventListener('mouseup', ()=>{ tlDragging=false; });
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  MASK EDITOR
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function buildEditorGrid(){
+  const grid=document.getElementById('mask-grid-el');
+  grid.innerHTML='';
+  let painting=false, paintVal=null;
+
+  for(let r=0;r<GROWS;r++){
+    for(let c=0;c<GCOLS;c++){
+      const cell=document.createElement('div');
+      cell.className='mcell '+(S.mask[r][c]?'opaque':'clear');
+      cell.addEventListener('mousedown',e=>{
+        painting=true;
+        paintVal=S.mask[r][c]?0:1;
+        S.mask[r][c]=paintVal;
+        cell.className='mcell '+(paintVal?'opaque':'clear');
+        e.preventDefault();
+      });
+      cell.addEventListener('mouseover',()=>{
+        if(painting){
+          S.mask[r][c]=paintVal;
+          cell.className='mcell '+(paintVal?'opaque':'clear');
+        }
+      });
+      grid.appendChild(cell);
+    }
+  }
+  document.addEventListener('mouseup',()=>{ painting=false; });
+}
+function presetDefault(){
+  S.mask=DEFAULT_MASK.map(r=>[...r]);
+  buildEditorGrid();
+}
+function clearMaskGrid(){
+  S.mask=Array.from({length:10},()=>new Array(10).fill(0));
+  buildEditorGrid();
+}
+function invertMaskGrid(){
+  S.mask=S.mask.map(r=>r.map(v=>v?0:1));
+  buildEditorGrid();
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  INIT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+buildEditorGrid();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

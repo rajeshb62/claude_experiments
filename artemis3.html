@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Artemis III — LEO Systems Demonstration (2027)</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:'Space Grotesk',sans-serif}
+#wrap{position:relative;width:100%;height:100vh}
+#c{display:block;width:100%;height:100%;position:absolute}
+#progress-bar{position:absolute;bottom:52px;left:0;height:2px;background:#4fd4f8;box-shadow:0 0 6px #4fd4f8;transition:none}
+#scene-bar{position:absolute;bottom:0;left:0;right:0;height:52px;background:rgba(0,0,0,0.8);border-top:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;padding:0 12px;backdrop-filter:blur(6px)}
+.scene-dot{flex:1;display:flex;flex-direction:column;align-items:center;cursor:pointer;padding:6px 4px;opacity:0.4;min-width:0;transition:opacity 0.2s}
+.scene-dot.active{opacity:1}
+.scene-dot.done{opacity:0.6}
+.scene-dot:hover{opacity:0.75}
+.dot-pip{width:8px;height:8px;border-radius:50%;background:#4a6080;margin-bottom:4px;transition:all 0.2s}
+.scene-dot.active .dot-pip{background:#4fd4f8;box-shadow:0 0 8px #4fd4f8}
+.scene-dot.done .dot-pip{background:#2060a0}
+.dot-label{font-size:0.57rem;color:#6080a0;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100px;letter-spacing:0.04em;text-transform:uppercase}
+.scene-dot.active .dot-label{color:#4fd4f8}
+#hud-top{position:absolute;top:14px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none}
+#hud-top h1{font-size:1.0rem;font-weight:600;color:#e0e8f8;letter-spacing:0.05em;text-shadow:0 0 20px rgba(79,212,248,0.4)}
+#hud-top p{font-size:0.66rem;color:#4a6a90;letter-spacing:0.08em;text-transform:uppercase;margin-top:2px}
+#ctrl{position:absolute;top:12px;right:16px;display:flex;gap:6px;align-items:center}
+.cbtn{background:rgba(10,20,40,0.85);border:1px solid #1a3050;color:#8aaccc;border-radius:6px;padding:4px 12px;font-size:0.72rem;font-family:'Space Grotesk',sans-serif;cursor:pointer;transition:all 0.15s}
+.cbtn:hover{border-color:#4fd4f8;color:#4fd4f8}
+.cbtn.active{background:rgba(79,212,248,0.12);border-color:#4fd4f8;color:#4fd4f8}
+#badge{position:absolute;top:14px;left:16px;pointer-events:none}
+#badge .b1{font-size:0.6rem;font-weight:700;color:#4fd4f8;letter-spacing:0.12em;text-transform:uppercase}
+#badge .b2{font-size:1.0rem;font-weight:700;color:#e0e8ff;letter-spacing:0.05em}
+#badge .b3{font-size:0.58rem;color:#3a5070;letter-spacing:0.07em;text-transform:uppercase;margin-top:1px}
+#apollo9-tag{position:absolute;bottom:62px;left:50%;transform:translateX(-50%);background:rgba(4,8,20,0.85);border:1px solid rgba(248,224,32,0.25);border-radius:6px;padding:4px 14px;font-size:0.65rem;color:rgba(248,224,32,0.7);letter-spacing:0.06em;pointer-events:none;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="progress-bar" style="width:0%"></div>
+  <div id="hud-top">
+    <h1 id="scene-title">Launch</h1>
+    <p id="scene-sub">SLS launches Orion to Low Earth Orbit</p>
+  </div>
+  <div id="badge">
+    <div class="b1">NASA · 2027</div>
+    <div class="b2">Artemis III</div>
+    <div class="b3">LEO Systems Demo · Orion + HLS + Blue Moon + AxEMU</div>
+  </div>
+  <div id="ctrl">
+    <button class="cbtn" onclick="prevScene()">◀ Prev</button>
+    <button class="cbtn active" id="btn-pause" onclick="togglePause()">⏸ Pause</button>
+    <button class="cbtn" onclick="nextScene()">Next ▶</button>
+    <div style="width:1px;height:18px;background:#1a3050;margin:0 2px"></div>
+    <button class="cbtn active" id="spd1" onclick="setSpeed(1)">1×</button>
+    <button class="cbtn" id="spd2" onclick="setSpeed(2)">2×</button>
+  </div>
+  <div id="apollo9-tag">Comparable to Apollo 9 (1969) — critical Earth-orbit dress rehearsal before the lunar landing</div>
+  <div id="scene-bar"></div>
+</div>
+<script>
+const CW=1200, CH=680;
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+canvas.width=CW; canvas.height=CH;
+
+function resize(){
+  const s=Math.min(window.innerWidth/CW,window.innerHeight/CH);
+  canvas.style.width=(CW*s)+'px'; canvas.style.height=(CH*s)+'px';
+  canvas.style.left=((window.innerWidth-CW*s)/2)+'px';
+  canvas.style.top=((window.innerHeight-CH*s)/2)+'px';
+}
+resize(); window.addEventListener('resize',resize);
+
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const eout=t=>1-(1-t)*(1-t);
+const eout3=t=>1-(1-t)**3;
+const eio=t=>t<0.5?2*t*t:-1+(4-2*t)*t;
+const seg=(t,a,b)=>clamp((t-a)/(b-a),0,1);
+const TAU=Math.PI*2;
+
+// ── Stars ──
+const STARS=Array.from({length:300},()=>({x:Math.random()*CW,y:Math.random()*CH,r:Math.random()*1.4+0.2,tw:Math.random()*10}));
+function drawStars(alpha=1){
+  const now=performance.now()/1000;
+  ctx.save();
+  STARS.forEach(s=>{
+    const t=0.5+0.5*Math.sin(now*1.4+s.tw);
+    ctx.globalAlpha=alpha*t*0.8;ctx.fillStyle='#ffffff';
+    ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,TAU);ctx.fill();
+  });
+  ctx.restore();
+}
+
+// ── Earth from LEO (large, curved, close) ──
+function drawEarthLEO(yOffset=0,alpha=1,scrollX=0){
+  ctx.save();ctx.globalAlpha=alpha;
+  const horizY=CH*0.52+yOffset;
+  const R=2800; // radius of curvature of Earth horizon (px)
+  const earthCX=CW/2+scrollX*0.1, earthCY=horizY+R;
+  // Space → atmosphere gradient above horizon
+  const atmH=70;
+  const atm=ctx.createLinearGradient(0,horizY-atmH,0,horizY+20);
+  atm.addColorStop(0,'transparent');
+  atm.addColorStop(0.5,'rgba(40,120,220,0.12)');
+  atm.addColorStop(1,'rgba(80,160,255,0.3)');
+  ctx.fillStyle=atm;ctx.fillRect(0,horizY-atmH,CW,atmH+20);
+  // Earth surface clipped to arc
+  ctx.save();
+  ctx.beginPath();ctx.arc(earthCX,earthCY,R,0,TAU);ctx.clip();
+  // Ocean base
+  const og=ctx.createLinearGradient(0,horizY,0,CH);
+  og.addColorStop(0,'#1850a8');og.addColorStop(0.3,'#1040a0');og.addColorStop(1,'#0a2860');
+  ctx.fillStyle=og;ctx.fillRect(0,horizY,CW,CH-horizY);
+  // Continent patches scrolling
+  const cx0=scrollX%CW;
+  const continents=[
+    {x:-100,y:horizY+30,w:180,h:90,col:'#2a8040'},{x:140,y:horizY+50,w:220,h:80,col:'#2a8040'},
+    {x:400,y:horizY+20,w:160,h:100,col:'#339044'},{x:600,y:horizY+60,w:280,h:70,col:'#2a7838'},
+    {x:920,y:horizY+30,w:200,h:90,col:'#2a8040'},{x:1150,y:horizY+50,w:140,h:75,col:'#339044'},
+    {x:-300,y:horizY+80,w:100,h:50,col:'#c8b040'},{x:750,y:horizY+110,w:130,h:55,col:'#c0a838'},
+  ];
+  continents.forEach(({x,y,w,h,col})=>{
+    ctx.fillStyle=col;ctx.beginPath();
+    ctx.ellipse(x+cx0,y,w,h,0,0,TAU);ctx.fill();
+  });
+  // Ice cap
+  ctx.fillStyle='rgba(240,245,255,0.5)';ctx.beginPath();ctx.ellipse(CW/2+cx0,CH-20,320,60,0,0,TAU);ctx.fill();
+  // Cloud wisps
+  ctx.fillStyle='rgba(240,248,255,0.3)';
+  [{x:50,y:horizY+15,w:200,h:20},{x:350,y:horizY+35,w:180,h:16},{x:700,y:horizY+18,w:250,h:22},{x:1000,y:horizY+40,w:160,h:18}].forEach(({x,y,w,h})=>{
+    ctx.beginPath();ctx.ellipse(x+cx0,y,w,h,0,0,TAU);ctx.fill();
+  });
+  ctx.restore();
+  // Horizon line glow
+  ctx.save();
+  ctx.strokeStyle='rgba(80,160,255,0.35)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(earthCX,earthCY,R-1,-Math.PI,0);ctx.stroke();
+  // Thin atmosphere limb
+  const limbG=ctx.createLinearGradient(0,horizY-6,0,horizY+6);
+  limbG.addColorStop(0,'transparent');limbG.addColorStop(0.5,'rgba(100,180,255,0.5)');limbG.addColorStop(1,'rgba(60,140,220,0.2)');
+  ctx.fillStyle=limbG;ctx.fillRect(0,horizY-6,CW,12);
+  ctx.restore();
+  ctx.restore();
+}
+
+// ── Full Earth (for launch, far views) ──
+function drawEarthFull(cx,cy,r,alpha=1){
+  ctx.save();ctx.globalAlpha=alpha;
+  const bg=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,r*0.1,cx,cy,r);
+  bg.addColorStop(0,'#2060c0');bg.addColorStop(0.5,'#1040a0');bg.addColorStop(1,'#081830');
+  ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.fillStyle=bg;ctx.fill();
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.clip();
+  [{x:cx-r*0.05,y:cy-r*0.35,w:r*0.38,h:r*0.42,col:'#38a040'},
+   {x:cx-r*0.52,y:cy-r*0.25,w:r*0.32,h:r*0.38,col:'#309a3a'},
+   {x:cx+r*0.22,y:cy-r*0.15,w:r*0.35,h:r*0.3,col:'#3a9840'},
+   {x:cx+r*0.3,y:cy+r*0.25,w:r*0.22,h:r*0.18,col:'#c8b040'},
+   {x:cx-r*0.2,y:cy+r*0.62,w:r*0.5,h:r*0.12,col:'#f0f0f8'}].forEach(({x,y,w,h,col})=>{
+    ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(x,y,w,h,0,0,TAU);ctx.fill();
+  });
+  ctx.globalAlpha=0.3;ctx.fillStyle='#f0f8ff';
+  [{x:cx-r*0.1,y:cy-r*0.55,w:r*0.55,h:r*0.07},{x:cx+r*0.15,y:cy+r*0.15,w:r*0.45,h:r*0.06}].forEach(({x,y,w,h})=>{
+    ctx.beginPath();ctx.ellipse(x,y,w,h,0,0,TAU);ctx.fill();
+  });
+  ctx.restore();
+  const atm=ctx.createRadialGradient(cx,cy,r*0.88,cx,cy,r*1.16);
+  atm.addColorStop(0,'rgba(60,120,255,0.22)');atm.addColorStop(0.5,'rgba(40,100,220,0.08)');atm.addColorStop(1,'transparent');
+  ctx.fillStyle=atm;ctx.beginPath();ctx.arc(cx,cy,r*1.16,0,TAU);ctx.fill();
+  ctx.restore();
+}
+
+// ── SLS ──
+function drawSLS(cx,cy,scale=1,exhaust=0){
+  ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
+  const H=220,TW=40;
+  const cg=ctx.createLinearGradient(-TW/2,0,TW/2,0);
+  cg.addColorStop(0,'#c04010');cg.addColorStop(0.4,'#e86020');cg.addColorStop(0.6,'#f07030');cg.addColorStop(1,'#c04010');
+  ctx.fillStyle=cg;ctx.fillRect(-TW/2,-H,TW,H);
+  [-62,62].forEach(ox=>{
+    const sg=ctx.createLinearGradient(ox-12,0,ox+12,0);
+    sg.addColorStop(0,'#404050');sg.addColorStop(0.3,'#c0c0cc');sg.addColorStop(0.7,'#d8d8e0');sg.addColorStop(1,'#404050');
+    ctx.fillStyle=sg;ctx.fillRect(ox-12,-H*0.88,24,H*0.88);
+    ctx.fillStyle='#c0c0cc';ctx.beginPath();ctx.moveTo(ox-12,-H*0.88);ctx.lineTo(ox+12,-H*0.88);ctx.lineTo(ox,-H*0.88-28);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#202030';ctx.fillRect(ox-10,0,20,18);
+  });
+  ctx.fillStyle='#d0d4dc';ctx.fillRect(-TW/2,-H-8,TW,8);
+  ctx.fillStyle='#c0c8d8';ctx.fillRect(-18,-H-50,36,42);
+  ctx.fillStyle='#b0b8c8';ctx.fillRect(-16,-H-72,32,22);
+  ctx.fillStyle='#d8dce8';
+  ctx.beginPath();ctx.moveTo(-14,-H-72);ctx.lineTo(14,-H-72);ctx.lineTo(8,-H-100);ctx.lineTo(-8,-H-100);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#c03020';ctx.fillRect(-5,-H-100,10,24);
+  ctx.beginPath();ctx.moveTo(-5,-H-100);ctx.lineTo(5,-H-100);ctx.lineTo(0,-H-122);ctx.closePath();ctx.fill();
+  if(exhaust>0){
+    [-18,-6,6,18].forEach(ex=>{
+      const pH=eout3(exhaust)*120;
+      const g=ctx.createLinearGradient(ex,14,ex,14+pH);
+      g.addColorStop(0,`rgba(255,200,80,${exhaust*0.9})`);g.addColorStop(0.4,`rgba(255,100,30,${exhaust*0.6})`);g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(ex-8,14);ctx.lineTo(ex+8,14);ctx.lineTo(ex+pH*0.25,14+pH);ctx.lineTo(ex-pH*0.25,14+pH);ctx.closePath();ctx.fill();
+    });
+    [-62,62].forEach(ox=>{
+      const pH=eout3(exhaust)*150;
+      const g=ctx.createLinearGradient(ox,18,ox,18+pH);
+      g.addColorStop(0,`rgba(255,180,60,${exhaust})`);g.addColorStop(0.4,`rgba(220,80,20,${exhaust*0.7})`);g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(ox-14,18);ctx.lineTo(ox+14,18);ctx.lineTo(ox+pH*0.3,18+pH);ctx.lineTo(ox-pH*0.3,18+pH);ctx.closePath();ctx.fill();
+    });
+  }
+  ctx.restore();
+}
+
+// ── Orion ──
+function drawOrion(cx,cy,scale=1,angle=0,engineOn=false){
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(angle);ctx.scale(scale,scale);
+  ctx.fillStyle='#909aaa';ctx.fillRect(-14,0,28,32);
+  [-32,-16,16,30].forEach((sx,i)=>{
+    ctx.fillStyle='#1a3a70';ctx.fillRect(sx,-2,14,36);
+    ctx.strokeStyle='rgba(79,212,248,0.25)';ctx.lineWidth=0.5;
+    for(let j=0;j<4;j++){ctx.beginPath();ctx.moveTo(sx,j*9);ctx.lineTo(sx+14,j*9);ctx.stroke();}
+  });
+  const cg=ctx.createLinearGradient(-16,-28,16,-28);
+  cg.addColorStop(0,'#808898');cg.addColorStop(0.5,'#c0c8d8');cg.addColorStop(1,'#808898');
+  ctx.fillStyle=cg;ctx.beginPath();ctx.moveTo(-16,0);ctx.lineTo(16,0);ctx.lineTo(10,-28);ctx.lineTo(-10,-28);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(160,170,200,0.4)';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='rgba(100,180,255,0.55)';ctx.beginPath();ctx.ellipse(0,-14,5,4,0,0,TAU);ctx.fill();
+  if(engineOn){
+    const g=ctx.createLinearGradient(0,32,0,80);
+    g.addColorStop(0,'rgba(255,180,60,0.9)');g.addColorStop(0.5,'rgba(200,80,20,0.5)');g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(-8,32);ctx.lineTo(8,32);ctx.lineTo(4,80);ctx.lineTo(-4,80);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ── Starship HLS ──
+function drawStarshipHLS(cx,cy,scale=1,engineOn=false){
+  ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
+  const H=200;
+  const sg=ctx.createLinearGradient(-22,0,22,0);
+  sg.addColorStop(0,'#484858');sg.addColorStop(0.25,'#a0a8b8');sg.addColorStop(0.5,'#c8d0e0');sg.addColorStop(0.75,'#a0a8b8');sg.addColorStop(1,'#484858');
+  ctx.fillStyle=sg;ctx.fillRect(-22,-H,44,H);
+  const hg=ctx.createLinearGradient(-26,-H,26,-H);
+  hg.addColorStop(0,'#404050');hg.addColorStop(0.3,'#9098a8');hg.addColorStop(0.5,'#b8c0d0');hg.addColorStop(0.7,'#9098a8');hg.addColorStop(1,'#404050');
+  ctx.fillStyle=hg;ctx.fillRect(-26,-H,52,H*0.25);
+  ctx.fillStyle='#b0b8c8';ctx.beginPath();ctx.moveTo(-26,-H);ctx.lineTo(26,-H);ctx.lineTo(14,-H-55);ctx.lineTo(-14,-H-55);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(-14,-H-55);ctx.lineTo(14,-H-55);ctx.lineTo(0,-H-80);ctx.closePath();ctx.fill();
+  [[-22,-H*0.7],[22,-H*0.7]].forEach(([fx,fy],fi)=>{
+    ctx.fillStyle='#707888';ctx.beginPath();
+    if(fi===0){ctx.moveTo(fx,fy);ctx.lineTo(fx-28,fy+50);ctx.lineTo(fx,fy+70);}
+    else{ctx.moveTo(fx,fy);ctx.lineTo(fx+28,fy+50);ctx.lineTo(fx,fy+70);}
+    ctx.closePath();ctx.fill();
+  });
+  [[-22,-H*0.18],[22,-H*0.18]].forEach(([fx,fy],fi)=>{
+    ctx.fillStyle='#606878';ctx.beginPath();
+    if(fi===0){ctx.moveTo(fx,fy);ctx.lineTo(fx-34,fy+80);ctx.lineTo(fx,fy+90);}
+    else{ctx.moveTo(fx,fy);ctx.lineTo(fx+34,fy+80);ctx.lineTo(fx,fy+90);}
+    ctx.closePath();ctx.fill();
+  });
+  // Label band
+  ctx.fillStyle='rgba(79,212,248,0.15)';ctx.fillRect(-22,-H*0.35,44,14);
+  ctx.fillStyle='rgba(79,212,248,0.7)';ctx.font='600 6px Space Grotesk';ctx.textAlign='center';ctx.fillText('SpaceX HLS',0,-H*0.35+10);
+  [-14,-4,4,14].forEach(ex=>{
+    ctx.fillStyle='#303040';ctx.fillRect(ex-5,0,10,10);
+  });
+  if(engineOn){
+    [-14,-4,4,14].forEach(ex=>{
+      const pH=100;
+      const g=ctx.createLinearGradient(ex,12,ex,12+pH);
+      g.addColorStop(0,'rgba(200,220,255,0.95)');g.addColorStop(0.3,'rgba(100,140,255,0.6)');g.addColorStop(1,'transparent');
+      ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(ex-6,12);ctx.lineTo(ex+6,12);ctx.lineTo(ex+pH*0.18,12+pH);ctx.lineTo(ex-pH*0.18,12+pH);ctx.closePath();ctx.fill();
+    });
+  }
+  ctx.fillStyle='rgba(100,180,255,0.5)';ctx.beginPath();ctx.ellipse(0,-H*0.65,6,5,0,0,TAU);ctx.fill();
+  ctx.restore();
+}
+
+// ── Blue Moon Lander (Blue Origin) ──
+function drawBlueMoon(cx,cy,scale=1){
+  ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
+  const H=170;
+  // Descent stage (hexagonal, wide)
+  const dsg=ctx.createLinearGradient(-38,0,38,0);
+  dsg.addColorStop(0,'#1a2840');dsg.addColorStop(0.2,'#2a4070');dsg.addColorStop(0.5,'#3a5890');dsg.addColorStop(0.8,'#2a4070');dsg.addColorStop(1,'#1a2840');
+  ctx.fillStyle=dsg;
+  ctx.beginPath();
+  ctx.moveTo(-38,-H*0.32);ctx.lineTo(-32,-H*0.5);ctx.lineTo(32,-H*0.5);ctx.lineTo(38,-H*0.32);
+  ctx.lineTo(38,-H*0.08);ctx.lineTo(-38,-H*0.08);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='rgba(79,160,255,0.35)';ctx.lineWidth=1;ctx.stroke();
+  // Ascent module (cylindrical, white/blue)
+  const amg=ctx.createLinearGradient(-20,-H*0.5,20,-H*0.5);
+  amg.addColorStop(0,'#303850');amg.addColorStop(0.3,'#8090b0');amg.addColorStop(0.5,'#a0b0d0');amg.addColorStop(0.7,'#8090b0');amg.addColorStop(1,'#303850');
+  ctx.fillStyle=amg;ctx.fillRect(-20,-H*0.5,40,H*0.42);
+  ctx.strokeStyle='rgba(100,160,255,0.3)';ctx.lineWidth=1;ctx.strokeRect(-20,-H*0.5,40,H*0.42);
+  // Nose cone
+  ctx.fillStyle='#9098b8';
+  ctx.beginPath();ctx.moveTo(-20,-H*0.5);ctx.lineTo(20,-H*0.5);ctx.lineTo(12,-H*0.78);ctx.lineTo(-12,-H*0.78);ctx.closePath();ctx.fill();
+  ctx.beginPath();ctx.moveTo(-12,-H*0.78);ctx.lineTo(12,-H*0.78);ctx.lineTo(0,-H);ctx.closePath();ctx.fill();
+  // Docking port on top
+  ctx.fillStyle='#506080';ctx.fillRect(-8,-H-5,16,5);
+  ctx.strokeStyle='rgba(79,212,248,0.5)';ctx.lineWidth=1;ctx.strokeRect(-8,-H-5,16,5);
+  // Blue Origin label band
+  ctx.fillStyle='rgba(30,100,220,0.2)';ctx.fillRect(-20,-H*0.35,40,12);
+  ctx.fillStyle='rgba(100,180,255,0.7)';ctx.font='600 6px Space Grotesk';ctx.textAlign='center';ctx.fillText('Blue Moon',0,-H*0.35+9);
+  // Landing legs (4)
+  [[-38,-H*0.08],[-38,-H*0.08],[38,-H*0.08],[38,-H*0.08]].forEach(([lx,ly],i)=>{
+    const side=i<2?-1:1;
+    ctx.strokeStyle='#2a3a60';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(lx+side*18,ly+35);ctx.stroke();
+    // Foot
+    ctx.fillStyle='#1a2a50';ctx.beginPath();ctx.ellipse(lx+side*18,ly+35,10,4,0,0,TAU);ctx.fill();
+  });
+  // Propellant tanks (visible on descent stage)
+  [-20,0,20].forEach(tx=>{
+    ctx.fillStyle='#253555';ctx.beginPath();ctx.ellipse(tx,-H*0.2,7,10,0,0,TAU);ctx.fill();
+    ctx.strokeStyle='rgba(79,120,200,0.3)';ctx.lineWidth=0.8;ctx.stroke();
+  });
+  // Window
+  ctx.fillStyle='rgba(80,160,255,0.45)';ctx.beginPath();ctx.ellipse(0,-H*0.6,5,5,0,0,TAU);ctx.fill();
+  ctx.restore();
+}
+
+// ── AxEMU Spacesuit astronaut ──
+function drawAxEMU(cx,cy,scale=1,armAngle=0,floating=0){
+  ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);
+  const bob=Math.sin(floating*TAU)*5;
+  ctx.translate(0,bob);
+  // PLSS backpack
+  ctx.fillStyle='#d0d8e8';ctx.fillRect(-10,-20,8,20);
+  // Suit torso (white with red stripe — AxEMU hallmark)
+  ctx.fillStyle='#e8edf5';ctx.beginPath();ctx.roundRect(-12,-34,24,22,4);ctx.fill();
+  // Red accent stripe
+  ctx.fillStyle='#c02828';ctx.fillRect(-12,-30,24,4);
+  // Helmet ring
+  ctx.fillStyle='#c0c8d8';ctx.fillRect(-13,-36,26,4);
+  // Helmet
+  const hg=ctx.createRadialGradient(-3,-46,2,-1,-44,13);
+  hg.addColorStop(0,'#d8dce8');hg.addColorStop(1,'#9098a8');
+  ctx.fillStyle=hg;ctx.beginPath();ctx.arc(0,-46,13,0,TAU);ctx.fill();
+  ctx.strokeStyle='rgba(160,170,200,0.5)';ctx.lineWidth=1;ctx.stroke();
+  // Gold visor
+  const vg=ctx.createLinearGradient(-10,-52,10,-40);
+  vg.addColorStop(0,'rgba(200,160,20,0.6)');vg.addColorStop(1,'rgba(180,130,10,0.4)');
+  ctx.fillStyle=vg;ctx.beginPath();ctx.ellipse(2,-47,9,7,0.15,0,TAU);ctx.fill();
+  ctx.strokeStyle='rgba(220,180,40,0.5)';ctx.lineWidth=0.8;ctx.stroke();
+  // Legs
+  ctx.strokeStyle='#d0d8e8';ctx.lineWidth=7;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-5,-12);ctx.lineTo(-5,-12+22);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(5,-12);ctx.lineTo(5,-12+22);ctx.stroke();
+  // Boots
+  ctx.fillStyle='#808898';
+  ctx.beginPath();ctx.ellipse(-5,-12+27,7,4,0,0,TAU);ctx.fill();
+  ctx.beginPath();ctx.ellipse(5,-12+27,7,4,0,0,TAU);ctx.fill();
+  // Arms — left raised (tool use), right normal
+  ctx.strokeStyle='#d0d8e8';ctx.lineWidth=6;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-12,-28);ctx.lineTo(-24+Math.cos(armAngle)*14,-18+Math.sin(armAngle)*14);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(12,-28);ctx.lineTo(24,-22);ctx.stroke();
+  // Glove highlight
+  ctx.fillStyle='#c0c8d8';
+  ctx.beginPath();ctx.arc(-24+Math.cos(armAngle)*14,-18+Math.sin(armAngle)*14,5,0,TAU);ctx.fill();
+  ctx.beginPath();ctx.arc(24,-22,5,0,TAU);ctx.fill();
+  // Tether line
+  ctx.strokeStyle='rgba(200,220,255,0.35)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(0,60);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// ── Docking collar / tunnel ──
+function drawDockingTunnel(x0,y0,x1,y1,alpha=1){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle='rgba(79,212,248,0.6)';ctx.lineWidth=4;
+  ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+  ctx.strokeStyle='rgba(79,212,248,0.2)';ctx.lineWidth=12;
+  ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+  // Flash at connection point
+  const mx=(x0+x1)/2, my=(y0+y1)/2;
+  ctx.fillStyle='rgba(79,212,248,0.5)';ctx.shadowColor='#4fd4f8';ctx.shadowBlur=10;
+  ctx.beginPath();ctx.arc(mx,my,5,0,TAU);ctx.fill();
+  ctx.restore();
+}
+
+// ── HUD box ──
+function drawHUD(lines,color,x,y){
+  ctx.save();
+  ctx.fillStyle='rgba(3,7,18,0.8)';ctx.strokeStyle=color+'44';ctx.lineWidth=1;
+  ctx.beginPath();ctx.roundRect(x-8,y-18,168,lines.length*18+12,5);ctx.fill();ctx.stroke();
+  lines.forEach((l,i)=>{
+    ctx.fillStyle=i===0?color:'rgba(160,180,210,0.85)';
+    ctx.font=`${i===0?'600':'400'} ${i===0?'10':'9'}px JetBrains Mono`;
+    ctx.textAlign='left';ctx.fillText(l,x,y+i*18);
+  });
+  ctx.restore();
+}
+
+// ── Orbit arc helper ──
+function drawOrbitArc(cx,cy,rx,ry,alpha=0.15){
+  ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle='#4fd4f8';ctx.lineWidth=1;ctx.setLineDash([3,6]);
+  ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,TAU);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+}
+
+// ── KSC pad ──
+function drawLaunchPad(cx,y){
+  ctx.save();
+  ctx.fillStyle='#303840';ctx.fillRect(cx-80,y,160,30);
+  ctx.fillStyle='#1a2028';ctx.fillRect(cx-40,y+8,80,22);
+  ctx.strokeStyle='#506070';ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(cx+70,y);ctx.lineTo(cx+70,y-180);ctx.stroke();
+  for(let i=1;i<5;i++){ctx.beginPath();ctx.moveTo(cx+70,y-i*40);ctx.lineTo(cx+22,y-i*40);ctx.stroke();}
+  ctx.restore();
+}
+
+// ── Info card ──
+function drawInfoCard(x,y,title,lines,color='#4fd4f8'){
+  const w=200, lh=16;
+  ctx.save();
+  ctx.fillStyle='rgba(3,7,18,0.88)';ctx.strokeStyle=color+'50';ctx.lineWidth=1;
+  ctx.beginPath();ctx.roundRect(x,y,w,lines.length*lh+30,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle=color;ctx.font='600 9px Space Grotesk';ctx.textAlign='left';
+  ctx.letterSpacing='0.05em';ctx.fillText(title.toUpperCase(),x+10,y+14);
+  ctx.strokeStyle=color+'30';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(x+8,y+18);ctx.lineTo(x+w-8,y+18);ctx.stroke();
+  lines.forEach((l,i)=>{
+    ctx.fillStyle='rgba(150,175,210,0.85)';ctx.font='400 8.5px JetBrains Mono';
+    ctx.fillText(l,x+10,y+30+i*lh);
+  });
+  ctx.restore();
+}
+
+// ── Particles ──
+let particles=[];
+function spawnP(o){ if(particles.length<400) particles.push({life:1,...o}); }
+function updateP(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;
+    if(p.gravity)p.vy+=40*dt;p.life-=dt/p.ml;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+function drawP(){
+  particles.forEach(p=>{
+    if(p.life<=0)return;
+    ctx.save();ctx.globalAlpha=Math.max(0,p.life)*(p.a||1);ctx.fillStyle=p.c||'#fff';
+    if(p.smoke){ctx.beginPath();ctx.arc(p.x,p.y,p.r*(2-p.life*0.8),0,TAU);ctx.fill();}
+    else{ctx.shadowColor=p.c;ctx.shadowBlur=p.bl||4;ctx.beginPath();ctx.arc(p.x,p.y,p.r||2,0,TAU);ctx.fill();}
+    ctx.restore();
+  });
+}
+
+// ── Scenes ──
+const SCENES=[
+  {name:'Launch',sub:'SLS lifts off from KSC · Orion ascends to LEO'},
+  {name:'LEO Orbit',sub:'Orion established in Low Earth Orbit · ~400 km'},
+  {name:'Starship HLS Approach',sub:'Orion rendezvouses with pre-positioned Starship HLS'},
+  {name:'HLS Docking',sub:'Orion docks with Starship HLS · interface & hatch tests'},
+  {name:'AxEMU Spacewalk',sub:'New Axiom spacesuit tested in free space — EVA demo'},
+  {name:'Blue Moon Approach',sub:'Orion moves to rendezvous with Blue Origin\'s Blue Moon'},
+  {name:'Blue Moon Docking',sub:'Orion docks with Blue Moon · docking system verified'},
+  {name:'Return & Splashdown',sub:'Orion undocks · de-orbit burn · Pacific splashdown'},
+];
+
+let sceneIdx=0,sceneT=0,paused=false,speed=1,lastTs=null;
+const SCENE_DUR=13;
+
+const bar=document.getElementById('scene-bar');
+SCENES.forEach((s,i)=>{
+  const d=document.createElement('div');
+  d.className='scene-dot'+(i===0?' active':'');d.id='dot-'+i;
+  d.innerHTML=`<div class="dot-pip"></div><div class="dot-label">${s.name}</div>`;
+  d.onclick=()=>goScene(i);bar.appendChild(d);
+});
+function goScene(i){
+  sceneIdx=i;sceneT=0;particles=[];
+  document.querySelectorAll('.scene-dot').forEach((d,k)=>{
+    d.className='scene-dot'+(k===i?' active':k<i?' done':'');
+  });
+  document.getElementById('scene-title').textContent=SCENES[i].name;
+  document.getElementById('scene-sub').textContent=SCENES[i].sub;
+}
+function nextScene(){goScene(Math.min(sceneIdx+1,SCENES.length-1));}
+function prevScene(){goScene(Math.max(sceneIdx-1,0));}
+function togglePause(){paused=!paused;document.getElementById('btn-pause').textContent=paused?'▶ Play':'⏸ Pause';}
+function setSpeed(v){speed=v;document.getElementById('spd1').classList.toggle('active',v===1);document.getElementById('spd2').classList.toggle('active',v===2);}
+
+// ════════════════════════════════════════
+//  SCENE RENDERERS
+// ════════════════════════════════════════
+
+function scene0(p){ // Launch
+  const skyT=seg(p,0.15,0.75);
+  const bg=ctx.createLinearGradient(0,0,0,CH-52);
+  bg.addColorStop(0,`rgb(${lerp(2,0,skyT)},${lerp(8,0,skyT)},${lerp(28,8,skyT)})`);
+  bg.addColorStop(0.5,`rgb(${lerp(5,2,skyT)},${lerp(22,5,skyT)},${lerp(65,14,skyT)})`);
+  bg.addColorStop(1,`rgb(${lerp(110,18,skyT)},${lerp(90,28,skyT)},${lerp(70,14,skyT)})`);
+  ctx.fillStyle=bg;ctx.fillRect(0,0,CW,CH-52);
+  drawStars(skyT);
+  // Earth curvature appears as rocket climbs
+  if(skyT>0.5){
+    const ce=seg(skyT,0.5,1);
+    drawEarthLEO(-200+ce*200,ce*0.6,0);
+  }
+  // Ground
+  ctx.fillStyle=`rgba(22,32,44,${1-skyT})`;ctx.fillRect(0,CH*0.78,CW,CH);
+  const padY=Math.round(CH*0.78);
+  if(skyT<0.7) drawLaunchPad(CW*0.5,padY);
+  // Smoke cloud
+  if(p<0.45){
+    const smT=Math.min(p/0.08,1);
+    ctx.save();ctx.globalAlpha=smT*(1-skyT)*0.65;
+    const smg=ctx.createRadialGradient(CW*0.5,padY+25,0,CW*0.5,padY+25,100+smT*100);
+    smg.addColorStop(0,'rgba(200,190,175,0.9)');smg.addColorStop(0.5,'rgba(160,150,140,0.4)');smg.addColorStop(1,'transparent');
+    ctx.fillStyle=smg;ctx.beginPath();ctx.arc(CW*0.5,padY+25,100+smT*100,0,TAU);ctx.fill();ctx.restore();
+    if(Math.random()<0.2&&p>0.03&&p<0.3){
+      spawnP({smoke:true,x:CW*0.5+(Math.random()-0.5)*90,y:padY+20,
+        vx:(Math.random()-0.5)*28,vy:-14-Math.random()*18,ml:3.5,r:18+Math.random()*18,c:'rgba(180,170,155,0.35)',a:0.45});
+    }
+  }
+  const riseT=eout3(seg(p,0,0.88));
+  const ry=lerp(padY-40,padY-CH*1.05,riseT);
+  drawSLS(CW*0.5,ry,1.0,p<0.02?seg(p,0,0.02):1);
+  // MECO & SRB sep labels
+  if(p>0.28&&p<0.42){
+    const sp2=seg(p,0.28,0.38)*(1-seg(p,0.36,0.42));
+    ctx.save();ctx.globalAlpha=sp2;ctx.fillStyle='#f8e020';ctx.font='500 10px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#f8e020';ctx.shadowBlur=8;ctx.fillText('SRB SEPARATION — T+2:14',CW/2,CH*0.16);ctx.restore();
+  }
+  if(p>0.62&&p<0.76){
+    const mp=seg(p,0.62,0.7)*(1-seg(p,0.72,0.76));
+    ctx.save();ctx.globalAlpha=mp;ctx.fillStyle='#00d474';ctx.font='500 10px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#00d474';ctx.shadowBlur=8;ctx.fillText('MECO — ORION SEP — LEO INSERTION',CW/2,CH*0.2);ctx.restore();
+  }
+  drawHUD([`ALT: ${Math.round(riseT*420)} km`,`VEL: ${Math.round(riseT*7800)} m/s`,`T+${Math.round(p*480)}s`],'#f8a020',50,80);
+  drawInfoCard(CW-220,80,'Mission',['Target: Low Earth Orbit','Altitude: ~400 km','Launch: mid-2027'],'#4fd4f8');
+}
+
+function scene1(p){ // LEO Orbit
+  ctx.fillStyle='#000008';ctx.fillRect(0,0,CW,CH-52);
+  drawStars(0.85);
+  drawEarthLEO(0,1,p*600);
+  // Orbit path
+  drawOrbitArc(CW/2,CH*0.28,400,120,0.12);
+  // Orion position in orbit
+  const oA=-Math.PI/2+p*TAU*0.7;
+  const ox=CW/2+400*Math.cos(oA), oy=CH*0.28+120*Math.sin(oA);
+  // Glow trail
+  for(let i=0;i<18;i++){
+    const ta=-Math.PI/2+(p-i*0.006)*TAU*0.7;
+    const tx=CW/2+400*Math.cos(ta),ty=CH*0.28+120*Math.sin(ta);
+    ctx.save();ctx.globalAlpha=0.04*(1-i/18);ctx.fillStyle='#4fd4f8';
+    ctx.beginPath();ctx.arc(tx,ty,3,0,TAU);ctx.fill();ctx.restore();
+  }
+  drawOrion(ox,oy,0.75,oA+Math.PI/2);
+  // Sun glint
+  const sg=ctx.createRadialGradient(CW*0.9,CH*0.08,0,CW*0.9,CH*0.08,120);
+  sg.addColorStop(0,'rgba(255,245,200,0.25)');sg.addColorStop(1,'transparent');
+  ctx.fillStyle=sg;ctx.fillRect(0,0,CW,CH);
+  ctx.save();ctx.fillStyle='rgba(255,255,220,0.8)';ctx.shadowColor='#ffffe0';ctx.shadowBlur=20;
+  ctx.beginPath();ctx.arc(CW*0.9,CH*0.08,10,0,TAU);ctx.fill();ctx.restore();
+  // Mission clock
+  const orbitMin=Math.round(p*90);
+  drawHUD([`Orbit: LEO ~400 km`,`Orbital period: ~92 min`,`T+ ${Math.floor(orbitMin/60)}h ${orbitMin%60}m`],'#4fd4f8',50,80);
+  drawInfoCard(CW-225,80,'Next Step',['Rendezvous with','SpaceX Starship HLS','pre-positioned in LEO'],'#9040f0');
+  if(p>0.3&&p<0.55){
+    ctx.save();ctx.globalAlpha=seg(p,0.3,0.4)*(1-seg(p,0.48,0.55));
+    ctx.fillStyle='#4fd4f8';ctx.font='500 10px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#4fd4f8';ctx.shadowBlur=8;ctx.fillText('LEO ESTABLISHED — BEGINNING RENDEZVOUS SEQUENCE',CW/2,65);ctx.restore();
+  }
+}
+
+function scene2(p){ // Starship HLS Approach
+  ctx.fillStyle='#000008';ctx.fillRect(0,0,CW,CH-52);
+  drawStars(0.8);
+  drawEarthLEO(0,1,p*200);
+  // HLS waiting
+  const hlsX=CW*0.72, hlsY=CH*0.34;
+  drawStarshipHLS(hlsX,hlsY,0.6);
+  // Orion approaching
+  const orionSX=CW*0.18, orionEX=hlsX-58;
+  const approachT=eout3(seg(p,0.05,0.85));
+  const ox=lerp(orionSX,orionEX,approachT);
+  drawOrion(ox,hlsY,0.72,0);
+  // Trajectory dashes
+  ctx.save();ctx.globalAlpha=0.18;ctx.strokeStyle='#4fd4f8';ctx.lineWidth=1;ctx.setLineDash([4,8]);
+  ctx.beginPath();ctx.moveTo(orionSX,hlsY);ctx.lineTo(orionEX,hlsY);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  // Range readout
+  const rangekm=(1-approachT)*12;
+  // Radar overlay
+  if(p>0.3){
+    const rp=seg(p,0.3,0.7);
+    ctx.save();ctx.globalAlpha=rp*0.5;
+    ctx.strokeStyle='#00d474';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(ox+16,hlsY,rp*80,0,TAU);ctx.stroke();
+    ctx.beginPath();ctx.arc(ox+16,hlsY,rp*40,0,TAU);ctx.stroke();
+    ctx.restore();
+  }
+  // Alignment reticle on HLS
+  if(p>0.5){
+    const ap=seg(p,0.5,0.85);
+    ctx.save();ctx.globalAlpha=ap*0.7;ctx.strokeStyle='#00d474';ctx.lineWidth=1.5;
+    const rx=hlsX-26,ry=hlsY-165;
+    ctx.beginPath();ctx.moveTo(rx-12,ry);ctx.lineTo(rx+12,ry);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(rx,ry-12);ctx.lineTo(rx,ry+12);ctx.stroke();
+    ctx.beginPath();ctx.arc(rx,ry,8,0,TAU);ctx.stroke();ctx.restore();
+  }
+  drawHUD([`RANGE: ${rangekm.toFixed(2)} km`,`RATE: ${Math.round((1-approachT)*18)} m/s`,`HLS: STARSHIP (SpaceX)`],'#9040f0',50,80);
+  drawInfoCard(CW-225,80,'Starship HLS',['Pre-positioned in LEO','Lunar lander variant','Tested for: dock + hatch'],'#9040f0');
+}
+
+function scene3(p){ // HLS Docking
+  ctx.fillStyle='#000008';ctx.fillRect(0,0,CW,CH-52);
+  drawStars(0.8);
+  drawEarthLEO(0,1,p*80);
+  const hlsX=CW*0.62, hlsY=CH*0.36;
+  // Docked configuration
+  const dockT=eout3(seg(p,0,0.4));
+  const orionX=lerp(hlsX-100,hlsX-58,dockT);
+  drawStarshipHLS(hlsX,hlsY,0.65);
+  drawOrion(orionX,hlsY,0.72,0);
+  if(dockT>0.85) drawDockingTunnel(orionX+10,hlsY-28,hlsX-28,hlsY-165,seg(dockT,0.85,1));
+  // Docking complete flash
+  if(p>0.38&&p<0.55){
+    const df=seg(p,0.38,0.5)*(1-seg(p,0.48,0.55));
+    ctx.save();ctx.globalAlpha=df*0.6;ctx.fillStyle='#4fd4f8';ctx.shadowColor='#4fd4f8';ctx.shadowBlur=30;
+    ctx.beginPath();ctx.arc(hlsX-42,hlsY-96,15,0,TAU);ctx.fill();ctx.restore();
+    ctx.save();ctx.globalAlpha=df;ctx.fillStyle='#00d474';ctx.font='600 11px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#00d474';ctx.shadowBlur=8;ctx.fillText('DOCKING CONFIRMED — HARD CAPTURE',CW/2,72);ctx.restore();
+  }
+  // Test checklist
+  const tests=['Docking mechanism','Pressure integrity','Hatch alignment','Data link','EVA prep tunnel'];
+  const doneN=Math.floor(seg(p,0.45,0.95)*tests.length);
+  ctx.save();
+  ctx.fillStyle='rgba(3,7,18,0.85)';ctx.strokeStyle='rgba(0,180,80,0.3)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.roundRect(CW-215,80,195,tests.length*18+30,5);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#00d474';ctx.font='600 9px Space Grotesk';ctx.textAlign='left';ctx.fillText('INTERFACE CHECKS',CW-205,96);
+  ctx.strokeStyle='rgba(0,180,80,0.2)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(CW-207,100);ctx.lineTo(CW-28,100);ctx.stroke();
+  tests.forEach((t,i)=>{
+    const done=i<doneN;
+    ctx.fillStyle=done?'#00d474':'rgba(80,100,130,0.7)';ctx.font='400 8.5px JetBrains Mono';
+    ctx.fillText((done?'✓ ':'. ')+t,CW-205,114+i*18);
+  });
+  ctx.restore();
+  drawHUD([`Status: DOCKED`,`Interface: HLS fwd port`,`Crew: 4 aboard Orion`],'#9040f0',50,80);
+}
+
+function scene4(p){ // AxEMU EVA
+  ctx.fillStyle='#000008';ctx.fillRect(0,0,CW,CH-52);
+  drawStars(0.85);
+  drawEarthLEO(CH*0.1,1,p*250);
+  // Docked stack in background
+  ctx.save();ctx.globalAlpha=0.5;
+  drawStarshipHLS(CW*0.85,CH*0.3,0.35);
+  drawOrion(CW*0.82,CH*0.3,0.38,0);
+  ctx.restore();
+  // Astronaut 1 floating (AxEMU)
+  const a1T=seg(p,0.08,0.5);
+  const a1x=lerp(CW*0.5,CW*0.38,eio(a1T));
+  const armAng=-Math.PI/4+Math.sin(p*TAU*1.5)*0.3;
+  drawAxEMU(a1x,CH*0.38,1.1,armAng,p*2);
+  // Astronaut 2 AxEMU near airlock
+  if(p>0.3){
+    const a2p=seg(p,0.3,0.65);
+    ctx.save();ctx.globalAlpha=a2p;
+    drawAxEMU(CW*0.58,CH*0.42,0.85,-0.5,p*1.5+0.5);ctx.restore();
+  }
+  // Tether lines to Orion
+  ctx.save();ctx.globalAlpha=0.3;ctx.strokeStyle='rgba(200,220,255,0.5)';ctx.lineWidth=0.8;ctx.setLineDash([2,4]);
+  ctx.beginPath();ctx.moveTo(a1x,CH*0.38+55);ctx.lineTo(CW*0.82,CH*0.36);ctx.stroke();
+  ctx.setLineDash([]);ctx.restore();
+  // Suit highlight rings
+  if(p>0.2){
+    const sp2=0.5+0.5*Math.sin(p*TAU*2);
+    ctx.save();ctx.globalAlpha=sp2*0.25;ctx.strokeStyle='#c02828';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(a1x,CH*0.38,30,0,TAU);ctx.stroke();ctx.restore();
+  }
+  // EVA details
+  drawHUD([`AxEMU: NOMINAL`,`O₂: ${Math.round(100-p*15)}% · Suit: 8.3 psi`,`EVA: T+${Math.round(p*320)} min`],'#00d474',50,80);
+  drawInfoCard(CW-225,80,'AxEMU Spacesuit',['Axiom EMU — new design','More flexibility & dexterity','Tested here before Moon EVA'],'#00d474');
+  // Comms
+  if(p>0.45&&p<0.7){
+    const cp=seg(p,0.45,0.55)*(1-seg(p,0.62,0.7));
+    ctx.save();ctx.globalAlpha=cp*0.8;ctx.fillStyle='#4fd4f8';ctx.font='500 10px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#4fd4f8';ctx.shadowBlur=8;ctx.fillText('"Suit verified — all joints nominal. View of Earth is incredible."',CW/2,55);ctx.restore();
+  }
+  if(p>0.85){
+    ctx.save();ctx.globalAlpha=seg(p,0.85,1);ctx.fillStyle='#00d474';ctx.font='600 11px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#00d474';ctx.shadowBlur=8;ctx.fillText('AxEMU VALIDATION COMPLETE',CW/2,65);ctx.restore();
+  }
+}
+
+function scene5(p){ // Blue Moon Approach
+  ctx.fillStyle='#000008';ctx.fillRect(0,0,CW,CH-52);
+  drawStars(0.8);
+  drawEarthLEO(0,1,p*200);
+  // Blue Moon waiting
+  const bmX=CW*0.72, bmY=CH*0.38;
+  drawBlueMoon(bmX,bmY,0.65);
+  // Orion approaching (just undocked from HLS)
+  const orionSX=CW*0.15, orionEX=bmX-60;
+  const appT=eout3(seg(p,0.05,0.82));
+  const ox=lerp(orionSX,orionEX,appT);
+  drawOrion(ox,bmY,0.72,0);
+  // HLS departed (fading away)
+  ctx.save();ctx.globalAlpha=Math.max(0,0.3-p*0.4);
+  drawStarshipHLS(CW*0.2,bmY-60,0.4);ctx.restore();
+  // Approach path
+  ctx.save();ctx.globalAlpha=0.16;ctx.strokeStyle='#4080ff';ctx.lineWidth=1;ctx.setLineDash([4,8]);
+  ctx.beginPath();ctx.moveTo(orionSX,bmY);ctx.lineTo(orionEX,bmY);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  // Radar / ranging
+  if(p>0.35){
+    const rp=seg(p,0.35,0.72);
+    const rangekm=(1-appT)*10;
+    ctx.save();ctx.globalAlpha=rp*0.45;ctx.strokeStyle='#4080ff';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(ox+16,bmY,rp*70,0,TAU);ctx.stroke();ctx.restore();
+    drawHUD([`RANGE: ${rangekm.toFixed(2)} km`,`RATE: ${Math.round((1-appT)*16)} m/s`,`Target: Blue Moon`],'#4080ff',50,80);
+  } else {
+    drawHUD([`UNDOCKED from HLS`,`Moving to Blue Moon`,`Blue Origin lander`],'#4080ff',50,80);
+  }
+  drawInfoCard(CW-225,80,'Blue Moon',['Blue Origin lander','BE-7 engines','Alt to SpaceX HLS'],'#4080ff');
+  if(p>0.82){
+    ctx.save();ctx.globalAlpha=seg(p,0.82,0.95);ctx.fillStyle='#4080ff';ctx.font='500 10px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#4080ff';ctx.shadowBlur=8;ctx.fillText('INITIATING DOCKING APPROACH — BLUE MOON',CW/2,65);ctx.restore();
+  }
+}
+
+function scene6(p){ // Blue Moon Docking
+  ctx.fillStyle='#000008';ctx.fillRect(0,0,CW,CH-52);
+  drawStars(0.8);
+  drawEarthLEO(0,1,p*80);
+  const bmX=CW*0.62, bmY=CH*0.38;
+  const dockT=eout3(seg(p,0,0.42));
+  const orionX=lerp(bmX-100,bmX-62,dockT);
+  drawBlueMoon(bmX,bmY,0.65);
+  drawOrion(orionX,bmY,0.72,0);
+  // Docking tunnel (Orion top to Blue Moon docking port)
+  if(dockT>0.88){
+    drawDockingTunnel(orionX+10,bmY-28,bmX,bmY-176,seg(dockT,0.88,1));
+  }
+  if(p>0.4&&p<0.58){
+    const df=seg(p,0.4,0.52)*(1-seg(p,0.5,0.58));
+    ctx.save();ctx.globalAlpha=df*0.6;ctx.fillStyle='#4080ff';ctx.shadowColor='#4080ff';ctx.shadowBlur=30;
+    ctx.beginPath();ctx.arc(bmX,bmY-176,14,0,TAU);ctx.fill();ctx.restore();
+    ctx.save();ctx.globalAlpha=df;ctx.fillStyle='#00d474';ctx.font='600 11px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#00d474';ctx.shadowBlur=8;ctx.fillText('BLUE MOON DOCKING CONFIRMED',CW/2,72);ctx.restore();
+  }
+  // System verification
+  const sysTests=['Docking capture','Pressurization','Data bus handshake','Fuel line check','BE-7 interface'];
+  const doneN=Math.floor(seg(p,0.5,0.95)*sysTests.length);
+  ctx.save();
+  ctx.fillStyle='rgba(3,7,18,0.85)';ctx.strokeStyle='rgba(64,128,255,0.3)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.roundRect(CW-215,80,195,sysTests.length*18+30,5);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#4080ff';ctx.font='600 9px Space Grotesk';ctx.textAlign='left';ctx.fillText('BLUE MOON INTERFACE CHECK',CW-205,96);
+  ctx.strokeStyle='rgba(64,128,255,0.2)';ctx.lineWidth=0.5;ctx.beginPath();ctx.moveTo(CW-207,100);ctx.lineTo(CW-28,100);ctx.stroke();
+  sysTests.forEach((t,i)=>{
+    const done=i<doneN;
+    ctx.fillStyle=done?'#4080ff':'rgba(80,100,130,0.7)';ctx.font='400 8.5px JetBrains Mono';
+    ctx.fillText((done?'✓ ':'. ')+t,CW-205,114+i*18);
+  });
+  ctx.restore();
+  if(p>0.88){
+    ctx.save();ctx.globalAlpha=seg(p,0.88,1);ctx.fillStyle='#00d474';ctx.font='600 11px JetBrains Mono';ctx.textAlign='center';
+    ctx.shadowColor='#00d474';ctx.shadowBlur=10;
+    ctx.fillText('ALL OBJECTIVES COMPLETE — ARTEMIS III MISSION SUCCESS',CW/2,65);ctx.restore();
+    drawInfoCard(50,80,'Mission Complete',['HLS ✓ docked + verified','Blue Moon ✓ docked','AxEMU ✓ validated','Ready for Artemis IV Moon landing'],'#00d474');
+  } else {
+    drawHUD([`Status: DOCKED`,`Interface: Blue Moon port`,`Tests: ${doneN}/${sysTests.length}`],'#4080ff',50,80);
+  }
+}
+
+function scene7(p){ // Return & Splashdown
+  const atmT=seg(p,0.25,0.72);
+  const bg=ctx.createLinearGradient(0,0,0,CH-52);
+  bg.addColorStop(0,`rgb(${lerp(0,8,atmT)},${lerp(0,25,atmT)},${lerp(8,72,atmT)})`);
+  bg.addColorStop(0.5,`rgb(${lerp(0,18,atmT)},${lerp(0,75,atmT)},${lerp(15,170,atmT)})`);
+  bg.addColorStop(1,`rgb(${lerp(2,28,atmT)},${lerp(5,95,atmT)},${lerp(14,175,atmT)})`);
+  ctx.fillStyle=bg;ctx.fillRect(0,0,CW,CH-52);
+  drawStars(Math.max(0,1-atmT*3));
+  if(p<0.3) drawEarthFull(CW*0.65,CH*0.4,200,0.8);
+  if(p>0.2) drawEarthLEO(CH*(0.1+seg(p,0.2,0.65)*0.45),seg(p,0.2,0.6),0);
+  // Plasma entry
+  if(p>0.18&&p<0.55){
+    const ep=seg(p,0.18,0.5);
+    const ex=lerp(CW*0.72,CW*0.5,ep), ey=lerp(CH*0.12,CH*0.55,ep);
+    const tg=ctx.createRadialGradient(ex,ey,0,ex,ey,60);
+    tg.addColorStop(0,`rgba(255,130,30,${ep*0.85})`);tg.addColorStop(0.5,`rgba(255,60,0,${ep*0.4})`);tg.addColorStop(1,'transparent');
+    ctx.fillStyle=tg;ctx.fillRect(0,0,CW,CH);
+    ctx.save();ctx.fillStyle='rgba(255,200,80,0.9)';ctx.shadowColor='#ff8040';ctx.shadowBlur=20;
+    ctx.beginPath();ctx.arc(ex,ey,10,0,TAU);ctx.fill();ctx.restore();
+    if(p>0.28&&p<0.44){
+      const bk=seg(p,0.28,0.36)*(1-seg(p,0.38,0.44));
+      ctx.save();ctx.globalAlpha=bk;ctx.fillStyle='#f84040';ctx.font='600 10px JetBrains Mono';ctx.textAlign='center';
+      ctx.shadowColor='#f84040';ctx.shadowBlur=8;ctx.fillText('COMM BLACKOUT — PLASMA SHEATH',CW/2,72);ctx.restore();
+    }
+  }
+  // Ocean
+  if(p>0.58){
+    const op=seg(p,0.58,0.85);
+    const oceanY=CH*0.72;
+    ctx.fillStyle=`rgba(15,60,120,${op})`;ctx.fillRect(0,oceanY,CW,CH-52-oceanY);
+    ctx.strokeStyle=`rgba(100,160,220,${op*0.35})`;ctx.lineWidth=1.5;
+    ctx.beginPath();for(let x=0;x<=CW;x+=4){const wy=oceanY+Math.sin(x*0.025+performance.now()/1400)*7;x===0?ctx.moveTo(x,wy):ctx.lineTo(x,wy);}ctx.stroke();
+  }
+  // Capsule descent
+  const capsX=lerp(CW*0.72,CW*0.44,eout3(seg(p,0.18,0.88)));
+  const capsY=lerp(CH*0.12,CH*0.69,eout(seg(p,0.18,0.88)));
+  // Parachutes
+  if(p>0.5){
+    const pp=eout(seg(p,0.5,0.65));
+    for(let i=0;i<3;i++){
+      const px=capsX-22+i*22,py=capsY-55-pp*52;
+      const pr=pp*28;
+      ctx.save();ctx.globalAlpha=pp;
+      const cg=ctx.createRadialGradient(px,py,0,px,py,pr);
+      cg.addColorStop(0,'rgba(255,70,20,0.85)');cg.addColorStop(0.5,'rgba(240,240,240,0.7)');cg.addColorStop(1,'rgba(200,200,200,0.25)');
+      ctx.fillStyle=cg;ctx.beginPath();ctx.arc(px,py,pr,-Math.PI,0);ctx.closePath();ctx.fill();
+      ctx.strokeStyle='rgba(200,200,200,0.4)';ctx.lineWidth=0.8;ctx.stroke();
+      ctx.strokeStyle='rgba(200,200,200,0.4)';ctx.lineWidth=0.6;
+      ctx.beginPath();ctx.moveTo(px-pr*0.5,py);ctx.lineTo(capsX,capsY);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(px+pr*0.5,py);ctx.lineTo(capsX,capsY);ctx.stroke();
+      ctx.restore();
+    }
+  }
+  if(p>0.18&&p<0.92) drawOrion(capsX,capsY,0.65,-0.08);
+  // Splashdown
+  if(p>0.87){
+    const sp2=seg(p,0.87,0.97);
+    for(let i=0;i<5;i++){
+      const sr=sp2*140+i*22;
+      ctx.save();ctx.globalAlpha=Math.max(0,0.7-sp2*0.7-i*0.12)*0.6;
+      ctx.strokeStyle='rgba(100,180,240,0.5)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.ellipse(CW*0.44,CH*0.73,sr,sr*0.32,0,0,TAU);ctx.stroke();ctx.restore();
+    }
+  }
+  if(p>0.93){
+    ctx.save();ctx.globalAlpha=seg(p,0.93,1);
+    ctx.fillStyle='#00d474';ctx.font='700 16px Space Grotesk';ctx.textAlign='center';
+    ctx.shadowColor='#00d474';ctx.shadowBlur=22;ctx.fillText('ARTEMIS III — MISSION COMPLETE',CW/2,CH*0.35);
+    ctx.fillStyle='rgba(79,212,248,0.9)';ctx.font='500 11px Space Grotesk';ctx.shadowColor='transparent';
+    ctx.fillText('Systems verified. Artemis IV lunar landing — targeted 2028.',CW/2,CH*0.35+28);ctx.restore();
+  }
+  drawHUD([`De-orbit burn: complete`,`Entry interface: 122 km`,`Splashdown: Pacific`],'#f84040',50,80);
+}
+
+// ── Main loop ──
+function loop(ts){
+  const dt=lastTs?Math.min((ts-lastTs)/1000,0.05):0;
+  lastTs=ts;
+  if(!paused){
+    sceneT+=dt*speed;
+    if(sceneT>SCENE_DUR){sceneT=0;goScene(Math.min(sceneIdx+1,SCENES.length-1));}
+  }
+  const p=clamp(sceneT/SCENE_DUR,0,1);
+  document.getElementById('progress-bar').style.width=(((sceneIdx+p)/SCENES.length)*100)+'%';
+  ctx.clearRect(0,0,CW,CH);
+  updateP(dt);
+  switch(sceneIdx){
+    case 0:scene0(p);break;case 1:scene1(p);break;case 2:scene2(p);break;
+    case 3:scene3(p);break;case 4:scene4(p);break;case 5:scene5(p);break;
+    case 6:scene6(p);break;case 7:scene7(p);break;
+  }
+  drawP();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
